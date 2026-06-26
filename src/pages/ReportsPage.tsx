@@ -46,30 +46,198 @@ export default function ReportsPage() {
   const reportData = getReportData()
   const aggregates = calculateAggregates(reportData)
 
-  const exportCSV = () => {
+  const exportCSV = async () => {
     if (!reportData.length) { info('No data to export'); return }
-    const headers = ['Month', 'Year', 'Revenue', 'Export', 'B2B', 'Retail', 'Bulk', 'COGS', 'Employee', 'Finance', 'Depreciation', 'Other', 'Collections', 'Receivables', 'Payables', 'Gross Margin', 'Gross Margin%', 'Net Margin', 'Net Margin%']
-    const rows = reportData.map(r => [
-      r.month, r.year, r.revenue, r.sales.export, r.sales.b2b, r.sales.retail, r.sales.bulk,
-      r.expenses.cogs, r.expenses.employee, r.expenses.finance, r.expenses.depreciation, r.expenses.other,
-      r.collections, r.receivables, r.payables,
-      r.metrics.grossMargin, r.metrics.grossMarginPercent.toFixed(2),
-      r.metrics.netMargin, r.metrics.netMarginPercent.toFixed(2),
-    ])
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `financial-report-${reportType}-${selectedYear}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    info('CSV exported successfully')
+    try {
+      const xlsx = await import('xlsx')
+      const headers = [
+        'Period', 'Revenue', 'Export Sales', 'B2B Sales', 'Retail Sales', 'Bulk Sales', 
+        'COGS', 'Employee Expense', 'Finance Cost', 'Depreciation', 'Other Expense', 
+        'Collections', 'Receivables', 'Payables', 'Gross Margin', 'Gross Margin %', 
+        'Net Margin', 'Net Margin %'
+      ]
+      
+      const rows = reportData.map(r => ({
+        'Period': `${r.month} ${r.year}`,
+        'Revenue': r.revenue,
+        'Export Sales': r.sales.export,
+        'B2B Sales': r.sales.b2b,
+        'Retail Sales': r.sales.retail,
+        'Bulk Sales': r.sales.bulk,
+        'COGS': r.expenses.cogs,
+        'Employee Expense': r.expenses.employee,
+        'Finance Cost': r.expenses.finance,
+        'Depreciation': r.expenses.depreciation,
+        'Other Expense': r.expenses.other,
+        'Collections': r.collections,
+        'Receivables': r.receivables,
+        'Payables': r.payables,
+        'Gross Margin': r.metrics.grossMargin,
+        'Gross Margin %': `${r.metrics.grossMarginPercent.toFixed(2)}%`,
+        'Net Margin': r.metrics.netMargin,
+        'Net Margin %': `${r.metrics.netMarginPercent.toFixed(2)}%`
+      }))
+
+      // Add Totals Row
+      rows.push({
+        'Period': 'TOTAL',
+        'Revenue': aggregates.totalRevenue,
+        'Export Sales': reportData.reduce((s, r) => s + r.sales.export, 0),
+        'B2B Sales': reportData.reduce((s, r) => s + r.sales.b2b, 0),
+        'Retail Sales': reportData.reduce((s, r) => s + r.sales.retail, 0),
+        'Bulk Sales': reportData.reduce((s, r) => s + r.sales.bulk, 0),
+        'COGS': reportData.reduce((s, r) => s + r.expenses.cogs, 0),
+        'Employee Expense': reportData.reduce((s, r) => s + r.expenses.employee, 0),
+        'Finance Cost': reportData.reduce((s, r) => s + r.expenses.finance, 0),
+        'Depreciation': reportData.reduce((s, r) => s + r.expenses.depreciation, 0),
+        'Other Expense': reportData.reduce((s, r) => s + r.expenses.other, 0),
+        'Collections': aggregates.totalCollections,
+        'Receivables': reportData.reduce((s, r) => s + r.receivables, 0),
+        'Payables': reportData.reduce((s, r) => s + r.payables, 0),
+        'Gross Margin': aggregates.totalGrossMargin,
+        'Gross Margin %': `${aggregates.avgGrossMarginPercent.toFixed(2)}%`,
+        'Net Margin': aggregates.totalNetMargin,
+        'Net Margin %': `${aggregates.avgNetMarginPercent.toFixed(2)}%`
+      })
+
+      const worksheet = xlsx.utils.json_to_sheet(rows)
+      const workbook = xlsx.utils.book_new()
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Financials')
+      xlsx.writeFile(workbook, `Miklens_Financial_Report_${reportType}_FY${selectedYear}.xlsx`)
+      info('Excel Spreadsheet downloaded successfully!')
+    } catch (e) {
+      console.error(e)
+      info('Error generating Excel spreadsheet. Falling back to CSV...')
+      // Fallback to simple CSV download
+      const headers = ['Month', 'Year', 'Revenue', 'Export', 'B2B', 'Retail', 'Bulk', 'COGS', 'Employee', 'Finance', 'Depreciation', 'Other', 'Collections', 'Receivables', 'Payables', 'Gross Margin', 'Gross Margin%', 'Net Margin', 'Net Margin%']
+      const rows = reportData.map(r => [
+        r.month, r.year, r.revenue, r.sales.export, r.sales.b2b, r.sales.retail, r.sales.bulk,
+        r.expenses.cogs, r.expenses.employee, r.expenses.finance, r.expenses.depreciation, r.expenses.other,
+        r.collections, r.receivables, r.payables,
+        r.metrics.grossMargin, r.metrics.grossMarginPercent.toFixed(2),
+        r.metrics.netMargin, r.metrics.netMarginPercent.toFixed(2),
+      ])
+      const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+      const blob = new Blob([csv], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `financial-report-${reportType}-${selectedYear}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
   }
 
-  const exportPDF = () => {
-    info('PDF export requires jsPDF — printing window opened as fallback.')
-    window.print()
+  const exportPDF = async () => {
+    if (!reportData.length) { info('No data to export'); return }
+    try {
+      const { jsPDF } = await import('jspdf')
+      const autoTable = (await import('jspdf-autotable')).default
+      
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      
+      // Document branding header
+      doc.setFillColor(15, 23, 42) // Slate 900 primary brand color
+      doc.rect(0, 0, 297, 30, 'F')
+      
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(18)
+      doc.setFont('helvetica', 'bold')
+      doc.text('MIKLENS BIO - FINANCIAL PERFORMANCE REPORT', 14, 18)
+      
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Generated on: ${new Date().toLocaleDateString()} | Scope: ${getTitle()}`, 14, 25)
+
+      // Summary KPIs cards section in PDF
+      doc.setTextColor(15, 23, 42)
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Performance Summary (Values in Lakhs)', 14, 40)
+      
+      // Render summary row
+      const summaryHeaders = [['Total Revenue', 'Gross Margin', 'Net Profit', 'Collections', 'Avg GM %', 'Avg NM %']]
+      const summaryData = [[
+        formatLakh(aggregates.totalRevenue),
+        formatLakh(aggregates.totalGrossMargin),
+        formatLakh(aggregates.totalNetMargin),
+        formatLakh(aggregates.totalCollections),
+        formatPercent(aggregates.avgGrossMarginPercent),
+        formatPercent(aggregates.avgNetMarginPercent)
+      ]]
+
+      autoTable(doc, {
+        head: summaryHeaders,
+        body: summaryData,
+        startY: 44,
+        theme: 'grid',
+        headStyles: { fillStyle: 'DF', fillColor: [241, 245, 249], textColor: [71, 85, 105], fontStyle: 'bold', fontSize: 10 },
+        bodyStyles: { textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 11, halign: 'center' }
+      })
+
+      // Main Table
+      doc.setFont('helvetica', 'bold')
+      doc.text('Financial Breakdown Statement', 14, (doc as any).lastAutoTable.finalY + 12)
+
+      const mainHeaders = [[
+        'Period', 'Revenue (L)', 'COGS (L)', 'Gross Margin (L)', 'GM %', 'Opex (L)', 'Net Profit (L)', 'Collections (L)', 'Receivables (L)', 'Payables (L)'
+      ]]
+
+      const mainData = reportData.map(r => [
+        `${r.month.substring(0,3)} ${r.year}`,
+        r.revenue.toFixed(2),
+        r.expenses.cogs.toFixed(2),
+        r.metrics.grossMargin.toFixed(2),
+        `${r.metrics.grossMarginPercent.toFixed(1)}%`,
+        r.metrics.operatingExpenses.toFixed(2),
+        r.metrics.netMargin.toFixed(2),
+        r.collections.toFixed(2),
+        r.receivables.toFixed(2),
+        r.payables.toFixed(2)
+      ])
+
+      // Push Totals Row
+      mainData.push([
+        'TOTAL / AVG',
+        aggregates.totalRevenue.toFixed(2),
+        reportData.reduce((s, r) => s + r.expenses.cogs, 0).toFixed(2),
+        aggregates.totalGrossMargin.toFixed(2),
+        `${aggregates.avgGrossMarginPercent.toFixed(1)}%`,
+        reportData.reduce((s, r) => s + r.metrics.operatingExpenses, 0).toFixed(2),
+        aggregates.totalNetMargin.toFixed(2),
+        aggregates.totalCollections.toFixed(2),
+        reportData.reduce((s, r) => s + r.receivables, 0).toFixed(2),
+        reportData.reduce((s, r) => s + r.payables, 0).toFixed(2)
+      ])
+
+      autoTable(doc, {
+        head: mainHeaders,
+        body: mainData,
+        startY: (doc as any).lastAutoTable.finalY + 16,
+        theme: 'striped',
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] },
+        didParseCell: (data) => {
+          if (data.row.index === mainData.length - 1) {
+            data.cell.styles.fontStyle = 'bold'
+            data.cell.styles.fillColor = [226, 232, 240] // grey background for total row
+          }
+        }
+      })
+
+      // Footer signature section
+      const finalY = (doc as any).lastAutoTable.finalY
+      doc.setFontSize(8)
+      doc.setTextColor(148, 163, 184)
+      doc.text('This is a computer generated report and does not require a physical signature.', 14, finalY + 15)
+      doc.text(`Miklens Financial MIS Platform - Confidential`, 220, finalY + 15)
+
+      doc.save(`Miklens_Financial_Report_${reportType}_FY${selectedYear}.pdf`)
+      info('PDF report generated and downloaded!')
+    } catch (e) {
+      console.error(e)
+      info('Failed to generate PDF. Triggering print fallback...')
+      window.print()
+    }
   }
 
   const getTitle = () => {
