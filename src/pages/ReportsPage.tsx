@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { FileText, Download, Calendar, BarChart2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
