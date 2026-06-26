@@ -22,34 +22,65 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true)
   const [restoringId, setRestoringId] = useState<string | null>(null)
 
-  const { createRecord } = useFinancialActions()
-  const { canWrite } = useAuth()
+  const { createRecord, deleteRecord } = useFinancialActions()
+  const { user, canWrite } = useAuth()
   const { success, error: toastError } = useToast()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const handleRestore = async (log: AuditLog) => {
     if (!canWrite()) {
       toastError('You do not have permission to restore data.')
       return
     }
-    if (!log.oldValue) {
-      toastError('No backup data found for this record.')
+    const dataStr = log.oldValue || log.newValue
+    if (!dataStr) {
+      toastError('No backup data found for this record version.')
       return
     }
-    if (!confirm('Are you sure you want to restore this deleted record?')) return
+    if (!confirm(`Are you sure you want to restore/rollback to this version of the record?`)) return
 
     setRestoringId(log.id || null)
     try {
-      const parsedRecord = JSON.parse(log.oldValue)
+      const parsedRecord = JSON.parse(dataStr)
       delete parsedRecord.id
       await createRecord(parsedRecord)
-      success(`Successfully restored record for ${parsedRecord.month} ${parsedRecord.year}!`)
-      // Refresh logs
+      success(`Successfully restored/reverted record for ${parsedRecord.month} ${parsedRecord.year}!`)
       const data = await auditRepository.getRecent(100)
       setLogs(data)
     } catch (err: any) {
       toastError(err.message || 'Failed to restore record.')
     } finally {
       setRestoringId(null)
+    }
+  }
+
+  const handleDeleteRecord = async (log: AuditLog) => {
+    if (!canWrite()) {
+      toastError('You do not have permission to delete data.')
+      return
+    }
+    if (!confirm(`Are you sure you want to delete the active financial record for ${log.entityId}? This will remove the active data from dashboard charts.`)) return
+
+    setDeletingId(log.id || null)
+    try {
+      await deleteRecord(log.entityId)
+      // Log deletion activity in audit log
+      const dataStr = log.newValue || log.oldValue || ''
+      await auditRepository.log({
+        userId: user?.uid || '',
+        userEmail: user?.email || '',
+        action: 'delete',
+        entityType: 'financial',
+        entityId: log.entityId,
+        oldValue: dataStr,
+      })
+      success(`Successfully deleted financial record for ${log.entityId}!`)
+      const data = await auditRepository.getRecent(100)
+      setLogs(data)
+    } catch (err: any) {
+      toastError(err.message || 'Failed to delete record.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -121,16 +152,27 @@ export default function AuditPage() {
                       {log.field && ` · ${log.field}`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {log.action === 'delete' && log.entityType === 'financial' && log.oldValue && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    {log.entityType === 'financial' && (log.oldValue || log.newValue) && (
                       <button
                         onClick={() => handleRestore(log)}
                         disabled={restoringId === log.id}
                         className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-500 hover:bg-emerald-500/10 px-2 py-1 rounded transition-colors disabled:opacity-50 border border-emerald-500/20"
-                        title="Restore Deleted Record"
+                        title={log.action === 'delete' ? "Restore Deleted Record" : "Rollback to this version"}
                       >
                         <RotateCcw size={10} className={restoringId === log.id ? 'animate-spin' : ''} />
-                        Restore
+                        {log.action === 'delete' ? 'Restore' : 'Revert to this'}
+                      </button>
+                    )}
+                    {log.entityType === 'financial' && (log.action === 'create' || log.action === 'update') && (
+                      <button
+                        onClick={() => handleDeleteRecord(log)}
+                        disabled={deletingId === log.id}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-destructive hover:text-red-500 hover:bg-destructive/10 px-2.5 py-1 rounded transition-colors disabled:opacity-50 border border-destructive/20"
+                        title="Delete active record from database"
+                      >
+                        <Trash size={10} />
+                        Delete Data
                       </button>
                     )}
                     <Badge variant={config.variant}>{config.label}</Badge>
