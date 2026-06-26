@@ -20,10 +20,20 @@ const QUARTERS = [
 export default function ReportsPage() {
   const { enrichedRecords, availableYears, isLoading } = useFinancialStore()
   const [reportType, setReportType] = useState<ReportType>('annual')
-  const [selectedYear, setSelectedYear] = useState(availableYears[availableYears.length - 1] || new Date().getFullYear())
+  const [selectedYear, setSelectedYear] = useState(() => {
+    const currentFY = new Date().getMonth() >= 3 ? new Date().getFullYear() : new Date().getFullYear() - 1
+    return availableYears.length > 0 ? availableYears[availableYears.length - 1] : currentFY
+  })
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[0])
   const [selectedQuarter, setSelectedQuarter] = useState(0)
   const { info } = useToast()
+
+  // Update selected year automatically once years are loaded from Firestore
+  useEffect(() => {
+    if (availableYears.length > 0) {
+      setSelectedYear(availableYears[availableYears.length - 1])
+    }
+  }, [availableYears])
 
   const years = generateYears()
 
