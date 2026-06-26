@@ -31,8 +31,12 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "exceljs": "^4.4.0",
     "firebase": "^10.13.0",
     "framer-motion": "^11.3.24",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2",
     "lucide-react": "^0.436.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -41,11 +45,9 @@
     "recharts": "^2.12.7",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8",
-    "zustand": "^5.0.0",
-    "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.8.2",
-    "xlsx": "^0.18.5"
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
