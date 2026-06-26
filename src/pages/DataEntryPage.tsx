@@ -173,22 +173,22 @@ function parseSpreadsheet2D(grid: any[][]) {
   interface ColInfo {
     colIndex: number;
     header: string;
-    month: string;
-    year: number;
+    month: string | null;
+    year: number | null;
   }
   const monthCols: ColInfo[] = []
 
   for (let c = 0; c < headers.length; c++) {
     if (c === labelColIndex) continue
-    const parsed = parseHeaderMonthYear(headers[c])
-    if (parsed) {
-      monthCols.push({
-        colIndex: c,
-        header: String(headers[c]),
-        month: parsed.month,
-        year: parsed.year
-      })
-    }
+    const headerStr = String(headers[c] || '').trim()
+    if (!headerStr) continue
+    const parsed = parseHeaderMonthYear(headerStr)
+    monthCols.push({
+      colIndex: c,
+      header: headerStr,
+      month: parsed ? parsed.month : null,
+      year: parsed ? parsed.year : null
+    })
   }
 
   if (monthCols.length === 0) {
@@ -344,8 +344,8 @@ export default function DataEntryPage() {
   const watchMonth = watch('month')
 
   const applyParsedData = (col: any) => {
-    setValue('year', col.year)
-    setValue('month', col.month)
+    if (col.year) setValue('year', col.year)
+    if (col.month) setValue('month', col.month)
     setValue('revenue', col.values.revenue)
     setValue('exportSales', col.values.exportSales)
     setValue('b2bSales', col.values.b2bSales)
@@ -577,27 +577,26 @@ export default function DataEntryPage() {
               onChange={(e) => {
                 const text = e.target.value
                 setPasteText(text)
-                if (!text.trim()) return
-                // Parse TSV/CSV from pasted cells
-                const rows = text.split('\n').map(line => line.split('\t'))
+                if (!text.trim()) {
+                  setParsedColumns(null)
+                  return
+                }
+                const lines = text.split('\n').filter(l => l.trim())
+                const rows = lines.map(line => {
+                  if (line.includes('\t')) return line.split('\t')
+                  const parts = line.split(/\s{2,}/)
+                  if (parts.length === 1 && line.includes(',')) return line.split(',')
+                  return parts
+                })
                 const results = parseSpreadsheet2D(rows)
                 if (results && results.length > 0) {
                   setParsedColumns(results)
                   setSelectedColIndex(0)
                   applyParsedData(results[0])
-                  success(`Successfully parsed ${results.length} month column(s) from pasted text.`)
+                  success(`Successfully parsed ${results.length} column(s) from pasted text.`)
                 } else {
-                  // try simple comma separation fallback
-                  const csvRows = text.split('\n').map(line => line.split(','))
-                  const resultsCsv = parseSpreadsheet2D(csvRows)
-                  if (resultsCsv && resultsCsv.length > 0) {
-                    setParsedColumns(resultsCsv)
-                    setSelectedColIndex(0)
-                    applyParsedData(resultsCsv[0])
-                    success(`Successfully parsed ${resultsCsv.length} month column(s) from pasted CSV text.`)
-                  } else {
-                    toastError('Could not find any matching columns in the pasted data.')
-                  }
+                  setParsedColumns(null)
+                  toastError('Could not find any matching columns in the pasted data.')
                 }
               }}
               rows={3}
@@ -628,7 +627,7 @@ export default function DataEntryPage() {
                       applyParsedData(col)
                     }}
                   >
-                    {col.header} ({col.month} {col.year})
+                    {col.header} {col.month && col.year ? `(${col.month} ${col.year})` : '(Manual Date)'}
                   </Button>
                 ))}
               </div>
@@ -636,7 +635,11 @@ export default function DataEntryPage() {
               <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3 flex gap-2.5 items-start">
                 <Check className="text-emerald-500 shrink-0 mt-0.5" size={16} />
                 <div>
-                  <p className="text-xs font-medium text-emerald-800 dark:text-emerald-400">Intelligently Mapped Fields for {parsedColumns[selectedColIndex].month} {parsedColumns[selectedColIndex].year}:</p>
+                  <p className="text-xs font-medium text-emerald-800 dark:text-emerald-400">
+                    Intelligently Mapped Fields for {parsedColumns[selectedColIndex].month && parsedColumns[selectedColIndex].year 
+                      ? `${parsedColumns[selectedColIndex].month} ${parsedColumns[selectedColIndex].year}` 
+                      : `${parsedColumns[selectedColIndex].header} (Please select Month & Year below)`}:
+                  </p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 mt-1.5 text-[11px] text-muted-foreground">
                     <div>Revenue: ₹{(parsedColumns[selectedColIndex].values.revenue).toLocaleString('en-IN')}</div>
                     <div>COGS: ₹{(parsedColumns[selectedColIndex].values.cogs).toLocaleString('en-IN')}</div>
