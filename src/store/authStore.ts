@@ -16,8 +16,8 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
-      isLoading: true,
-      isInitialized: false,
+      isLoading: false,
+      isInitialized: typeof window !== 'undefined' && localStorage.getItem('auth-store') ? JSON.parse(localStorage.getItem('auth-store') || '{}').state?.user !== null : false,
       setUser: (user) => set({ user }),
       setLoading: (isLoading) => set({ isLoading }),
       setInitialized: (isInitialized) => set({ isInitialized }),
