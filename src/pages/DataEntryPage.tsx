@@ -93,8 +93,24 @@ function parseCleanNumber(val: any): number {
   return isNaN(parsed) ? 0 : parsed
 }
 
-function parseHeaderMonthYear(header: string) {
+function parseHeaderMonthYear(header: any) {
+  if (!header) return null
+  if (header instanceof Date) {
+    const monthName = Object.values(MONTH_MAP)[header.getMonth()]
+    return { month: monthName, year: header.getFullYear() }
+  }
+
   const clean = String(header).trim()
+
+  // Try matching Excel date serial number if it's a number
+  const num = Number(clean)
+  if (!isNaN(num) && num > 30000 && num < 60000) {
+    const date = new Date((num - 25569) * 86400 * 1000)
+    const monthName = Object.values(MONTH_MAP)[date.getMonth()]
+    return { month: monthName, year: date.getFullYear() }
+  }
+
+  // Regex for standard formats like Apr-26, Jun-2026, 06-2026, 06/2026, etc.
   const match = clean.match(/^([A-Za-z]{3})[-']?(\d{2}|\d{4})$/)
   if (match) {
     const mStr = match[1].toLowerCase()
@@ -108,6 +124,8 @@ function parseHeaderMonthYear(header: string) {
       return { month, year }
     }
   }
+
+  // Let's search the string for month words
   const lowerClean = clean.toLowerCase()
   for (const [key, val] of Object.entries(MONTH_MAP)) {
     if (lowerClean.includes(key)) {
@@ -126,11 +144,12 @@ function parseSpreadsheet2D(grid: any[][]) {
   if (!grid || grid.length === 0) return null
 
   let headerRowIndex = -1
-  for (let i = 0; i < Math.min(grid.length, 10); i++) {
+  // Scan up to 50 rows to find header row (some sheets have title or instructions first)
+  for (let i = 0; i < Math.min(grid.length, 50); i++) {
     const row = grid[i]
     if (row && row.some(cell => {
       const s = String(cell).toLowerCase()
-      return s.includes('particular') || s.includes('ltd') || parseHeaderMonthYear(s) !== null
+      return s.includes('particular') || s.includes('ltd') || parseHeaderMonthYear(cell) !== null
     })) {
       headerRowIndex = i
       break
@@ -143,6 +162,14 @@ function parseSpreadsheet2D(grid: any[][]) {
 
   const headers = grid[headerRowIndex] || []
   
+  let labelColIndex = 0
+  for (let c = 0; c < headers.length; c++) {
+    if (String(headers[c]).toLowerCase().includes('particular')) {
+      labelColIndex = c
+      break
+    }
+  }
+  
   interface ColInfo {
     colIndex: number;
     header: string;
@@ -151,7 +178,8 @@ function parseSpreadsheet2D(grid: any[][]) {
   }
   const monthCols: ColInfo[] = []
 
-  for (let c = 1; c < headers.length; c++) {
+  for (let c = 0; c < headers.length; c++) {
+    if (c === labelColIndex) continue
     const parsed = parseHeaderMonthYear(headers[c])
     if (parsed) {
       monthCols.push({
@@ -189,7 +217,7 @@ function parseSpreadsheet2D(grid: any[][]) {
     for (let r = headerRowIndex + 1; r < grid.length; r++) {
       const row = grid[r]
       if (!row || row.length === 0) continue
-      const label = String(row[0] || '').trim().toLowerCase()
+      const label = String(row[labelColIndex] || '').trim().toLowerCase()
       if (!label) continue
 
       const rawVal = row[col.colIndex]
@@ -519,8 +547,9 @@ export default function DataEntryPage() {
                 if (!file) return
                 const reader = new FileReader()
                 reader.onload = (evt) => {
-                  const bstr = evt.target?.result
-                  const wb = XLSX.read(bstr, { type: 'binary' })
+                  const buf = evt.target?.result as ArrayBuffer
+                  const dataArr = new Uint8Array(buf)
+                  const wb = XLSX.read(dataArr, { type: 'array', cellDates: true })
                   const wsname = wb.SheetNames[0]
                   const ws = wb.Sheets[wsname]
                   const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][]
@@ -534,7 +563,7 @@ export default function DataEntryPage() {
                     toastError('Could not find any month-year columns (e.g. Apr-26) in the template.')
                   }
                 }
-                reader.readAsBinaryString(file)
+                reader.readAsArrayBuffer(file)
               }}
             />
             <Upload className="mx-auto text-muted-foreground mb-2" size={28} />
