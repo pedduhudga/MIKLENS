@@ -201,29 +201,63 @@ export default function DashboardPage() {
     if (!filteredRecords.length) return
     try {
       const xlsx = await import('xlsx')
-      const rows = filteredRecords.map(r => ({
-        'Period': `${r.month} ${r.year}`,
-        'Revenue (Lakhs)': r.revenue,
-        'COGS (Lakhs)': r.expenses.cogs,
-        'Employee Cost (Lakhs)': r.expenses.employee,
-        'Finance Cost (Lakhs)': r.expenses.finance,
-        'Depreciation (Lakhs)': r.expenses.depreciation,
-        'Other Expenses (Lakhs)': r.expenses.other,
-        'Total Expenses (Lakhs)': r.metrics.totalExpenses,
-        'Gross Margin (Lakhs)': r.metrics.grossMargin,
-        'Gross Margin %': `${r.metrics.grossMarginPercent.toFixed(1)}%`,
-        'Net Profit (Lakhs)': r.metrics.netMargin,
-        'Net Profit %': `${r.metrics.netMarginPercent.toFixed(1)}%`,
-        'Collections (Lakhs)': r.collections,
-        'Collection Rate %': `${r.metrics.collectionPercent.toFixed(1)}%`,
-        'Receivables (Lakhs)': r.receivables,
-        'Payables (Lakhs)': r.payables
-      }))
+      
+      // Define headers and data rows manually to insert formula cells
+      const headers = [
+        'Period', 'Revenue (Lakhs)', 'COGS (Lakhs)', 'Employee Cost (Lakhs)', 'Finance Cost (Lakhs)',
+        'Depreciation (Lakhs)', 'Other Expenses (Lakhs)', 'Total Expenses (Lakhs)', 'Gross Margin (Lakhs)',
+        'Gross Margin %', 'Net Profit (Lakhs)', 'Net Profit %', 'Collections (Lakhs)', 'Collection Rate %',
+        'Receivables (Lakhs)', 'Payables (Lakhs)'
+      ]
+      
+      // SheetJS utility mapping values
+      const dataRows = filteredRecords.map((r, i) => {
+        const rowNum = i + 2 // 1-indexed header is row 1, data starts at row 2
+        return [
+          `${r.month} ${r.year}`, // A
+          r.revenue,             // B
+          r.expenses.cogs,       // C
+          r.expenses.employee,   // D
+          r.expenses.finance,    // E
+          r.expenses.depreciation,// F
+          r.expenses.other,      // G
+          { t: 'n', f: `C${rowNum}+D${rowNum}+E${rowNum}+F${rowNum}+G${rowNum}` }, // H: Total Expenses = COGS + Opex
+          { t: 'n', f: `B${rowNum}-C${rowNum}` },                                // I: Gross Margin = Revenue - COGS
+          { t: 'n', f: `IF(B${rowNum}>0, I${rowNum}/B${rowNum}, 0)`, z: '0.0%' }, // J: Gross Margin % = Gross Margin / Revenue
+          { t: 'n', f: `I${rowNum}-(D${rowNum}+E${rowNum}+F${rowNum}+G${rowNum})` }, // K: Net Profit = Gross Margin - Opex
+          { t: 'n', f: `IF(B${rowNum}>0, K${rowNum}/B${rowNum}, 0)`, z: '0.0%' }, // L: Net Profit % = Net Profit / Revenue
+          r.collections,         // M
+          { t: 'n', f: `IF(B${rowNum}>0, M${rowNum}/B${rowNum}, 0)`, z: '0.0%' }, // N: Collection Rate % = Collections / Revenue
+          r.receivables,         // O
+          r.payables             // P
+        ]
+      })
 
-      const worksheet = xlsx.utils.json_to_sheet(rows)
+      // Add a summary total row at the end
+      const totalRowNum = dataRows.length + 2
+      dataRows.push([
+        'TOTALS',
+        { t: 'n', f: `SUM(B2:B${totalRowNum-1})` },
+        { t: 'n', f: `SUM(C2:C${totalRowNum-1})` },
+        { t: 'n', f: `SUM(D2:D${totalRowNum-1})` },
+        { t: 'n', f: `SUM(E2:E${totalRowNum-1})` },
+        { t: 'n', f: `SUM(F2:F${totalRowNum-1})` },
+        { t: 'n', f: `SUM(G2:G${totalRowNum-1})` },
+        { t: 'n', f: `SUM(H2:H${totalRowNum-1})` },
+        { t: 'n', f: `SUM(I2:I${totalRowNum-1})` },
+        { t: 'n', f: `AVERAGE(J2:J${totalRowNum-1})`, z: '0.0%' },
+        { t: 'n', f: `SUM(K2:K${totalRowNum-1})` },
+        { t: 'n', f: `AVERAGE(L2:L${totalRowNum-1})`, z: '0.0%' },
+        { t: 'n', f: `SUM(M2:M${totalRowNum-1})` },
+        { t: 'n', f: `AVERAGE(N2:N${totalRowNum-1})`, z: '0.0%' },
+        { t: 'n', f: `SUM(O2:O${totalRowNum-1})` },
+        { t: 'n', f: `SUM(P2:P${totalRowNum-1})` }
+      ])
+
+      const worksheet = xlsx.utils.aoa_to_sheet([headers, ...dataRows])
       const workbook = xlsx.utils.book_new()
       xlsx.utils.book_append_sheet(workbook, worksheet, 'Dashboard Data')
-      xlsx.writeFile(workbook, `Miklens_Dashboard_Data_${new Date().toLocaleDateString()}.xlsx`)
+      xlsx.writeFile(workbook, `Miklens_Dashboard_Formulas_${new Date().toLocaleDateString()}.xlsx`)
     } catch (e) {
       console.error('Failed to export Excel:', e)
     }
