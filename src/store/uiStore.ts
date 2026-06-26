@@ -5,12 +5,15 @@ interface UIState {
   theme: 'light' | 'dark' | 'system'
   sidebarCollapsed: boolean
   sidebarMobileOpen: boolean
+  companyName: string
+  currency: string
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void
   toggleSidebar: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
   toggleMobileSidebar: () => void
   setMobileSidebar: (open: boolean) => void
+  setCompanyDetails: (name: string, currency: string) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -19,6 +22,8 @@ export const useUIStore = create<UIState>()(
       theme: 'light',
       sidebarCollapsed: false,
       sidebarMobileOpen: false,
+      companyName: 'My Company',
+      currency: 'INR',
 
       setTheme: (theme) => {
         set({ theme })
@@ -35,10 +40,16 @@ export const useUIStore = create<UIState>()(
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       toggleMobileSidebar: () => set((s) => ({ sidebarMobileOpen: !s.sidebarMobileOpen })),
       setMobileSidebar: (open) => set({ sidebarMobileOpen: open }),
+      setCompanyDetails: (companyName, currency) => set({ companyName, currency }),
     }),
     {
       name: 'ui-store',
-      partialize: (state) => ({ theme: state.theme, sidebarCollapsed: state.sidebarCollapsed }),
+      partialize: (state) => ({ 
+        theme: state.theme, 
+        sidebarCollapsed: state.sidebarCollapsed,
+        companyName: state.companyName,
+        currency: state.currency
+      }),
     }
   )
 )

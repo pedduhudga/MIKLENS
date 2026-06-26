@@ -10,17 +10,23 @@ import { useAuthStore } from '@/store/authStore'
 import { useToast } from '@/components/ui/toast-provider'
 
 export default function SettingsPage() {
-  const { theme, setTheme } = useUIStore()
+  const { theme, setTheme, companyName, currency, setCompanyDetails } = useUIStore()
   const { user } = useAuthStore()
   const { success } = useToast()
-  const [companyName, setCompanyName] = useState('My Company')
-  const [currency, setCurrency] = useState('INR')
+  
+  const [localCompanyName, setLocalCompanyName] = useState(companyName)
+  const [localCurrency, setLocalCurrency] = useState(currency)
 
   const themes = [
     { id: 'light', label: 'Light', icon: Sun },
     { id: 'dark', label: 'Dark', icon: Moon },
     { id: 'system', label: 'System', icon: Monitor },
   ]
+
+  const handleSaveCompanySettings = () => {
+    setCompanyDetails(localCompanyName, localCurrency)
+    success('Company settings saved successfully!')
+  }
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -68,13 +74,13 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Company Name</Label>
-            <Input value={companyName} onChange={e => setCompanyName(e.target.value)} />
+            <Input value={localCompanyName} onChange={e => setLocalCompanyName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Currency</Label>
-            <Input value={currency} onChange={e => setCurrency(e.target.value)} placeholder="INR" />
+            <Input value={localCurrency} onChange={e => setLocalCurrency(e.target.value)} placeholder="INR" />
           </div>
-          <Button onClick={() => success('Company settings saved')} className="w-full">Save Settings</Button>
+          <Button onClick={handleSaveCompanySettings} className="w-full">Save Settings</Button>
         </div>
       </motion.div>
 
