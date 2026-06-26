@@ -356,7 +356,7 @@ export default function DashboardPage() {
       }
 
       // Auto-fit Column Widths
-      worksheet.columns.forEach((column) => {
+      worksheet.columns.forEach((column: any) => {
         column.width = 18
       })
       worksheet.getColumn(1).width = 14 // Period
