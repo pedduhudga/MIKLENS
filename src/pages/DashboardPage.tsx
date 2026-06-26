@@ -277,14 +277,27 @@ export default function DashboardPage() {
         { t: 'n', f: `SUM(P2:P${totalRowNum-1})`, v: aggPayables }
       ])
 
-      // Guidance on how to insert charts in Excel
-      dataRows.push([])
-      dataRows.push(['Instructions for Charts & Graphs in Excel:'])
-      dataRows.push(['1. Select the columns you want to visualize (e.g., "Period" and "Revenue").'])
-      dataRows.push(['2. In the top Excel ribbon menu, click on "Insert" > "Recommended Charts" or select a Bar/Line chart.'])
-      dataRows.push(['3. Excel will generate a native interactive chart that automatically updates whenever you modify the values above!'])
-
+      // Format column widths for professional presentation
       const worksheet = xlsx.utils.aoa_to_sheet([headers, ...dataRows])
+      worksheet['!cols'] = [
+        { wch: 12 }, // Period
+        { wch: 15 }, // Revenue
+        { wch: 15 }, // COGS
+        { wch: 15 }, // Employee Cost
+        { wch: 15 }, // Finance Cost
+        { wch: 15 }, // Depreciation
+        { wch: 15 }, // Other Expenses
+        { wch: 18 }, // Total Expenses
+        { wch: 18 }, // Gross Margin
+        { wch: 15 }, // Gross Margin %
+        { wch: 18 }, // Net Profit
+        { wch: 15 }, // Net Profit %
+        { wch: 18 }, // Collections
+        { wch: 18 }, // Collection Rate %
+        { wch: 18 }, // Receivables
+        { wch: 18 }  // Payables
+      ]
+
       const workbook = xlsx.utils.book_new()
       xlsx.utils.book_append_sheet(workbook, worksheet, 'Dashboard Data')
       xlsx.writeFile(workbook, `Miklens_Dashboard_Formulas_${new Date().toLocaleDateString()}.xlsx`)
