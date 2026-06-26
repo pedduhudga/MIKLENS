@@ -22,7 +22,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 }
 
 const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-  if (percent < 0.05) return null
+  if (!percent || percent < 0.05) return null
   const RADIAN = Math.PI / 180
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5
   const x = cx + radius * Math.cos(-midAngle * RADIAN)
@@ -63,7 +63,20 @@ export function RevenueCompositionChart({ data, loading }: Props) {
             paddingAngle={3}
             dataKey="value"
             labelLine={false}
-            label={renderCustomLabel}
+            label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
+              if (!value || total === 0) return null
+              const pct = (value / total) * 100
+              if (pct < 5) return null
+              const RADIAN = Math.PI / 180
+              const radius = innerRadius + (outerRadius - innerRadius) * 0.5
+              const x = cx + radius * Math.cos(-midAngle * RADIAN)
+              const y = cy + radius * Math.sin(-midAngle * RADIAN)
+              return (
+                <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>
+                  {`${pct.toFixed(0)}%`}
+                </text>
+              )
+            }}
           >
             {chartData.map((_, index) => (
               <Cell key={index} fill={COLORS[index % COLORS.length]} />
