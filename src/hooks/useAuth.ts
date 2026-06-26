@@ -15,15 +15,19 @@ export function useAuthListener() {
   const { setUser, setLoading, setInitialized } = useAuthStore()
 
   useEffect(() => {
+    console.log('useAuthListener mounted. Setting up onAuthStateChanged...')
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log('onAuthStateChanged triggered. User authenticated:', !!firebaseUser)
       if (firebaseUser) {
         try {
+          console.log('Attempting to fetch Firestore document for user:', firebaseUser.uid)
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid))
+          console.log('User document fetched. Exists:', userDoc.exists())
           let role: UserRole = 'viewer'
           if (userDoc.exists()) {
             role = userDoc.data().role || 'viewer'
           } else {
-            // If the user authenticated successfully but doesn't exist in Firestore (e.g. demo credentials or first login offline), default to admin or viewer
+            console.log('User document does not exist in Firestore. Resolving fallback role...')
             role = firebaseUser.email === 'admin@company.com' || firebaseUser.email?.includes('pavan') ? 'admin' : 'viewer'
           }
           const profile: UserProfile = {
@@ -33,10 +37,12 @@ export function useAuthListener() {
             role,
             photoURL: firebaseUser.photoURL || undefined,
           }
+          console.log('Setting user profile in store:', profile)
           setUser(profile)
-        } catch (e) {
-          // If Firestore is completely inaccessible (blocked by security rules or missing configuration), still allow the user to view the UI with a mock profile
+        } catch (e: any) {
+          console.error('Firestore user doc fetch threw an error:', e)
           const role: UserRole = firebaseUser.email === 'admin@company.com' || firebaseUser.email?.includes('pavan') ? 'admin' : 'viewer'
+          console.log('Setting fallback profile due to error...')
           setUser({
             uid: firebaseUser.uid,
             email: firebaseUser.email || '',
@@ -45,8 +51,10 @@ export function useAuthListener() {
           })
         }
       } else {
+        console.log('No authenticated user. Setting store user to null.')
         setUser(null)
       }
+      console.log('Setting auth loading = false and initialized = true')
       setLoading(false)
       setInitialized(true)
     })
