@@ -171,7 +171,7 @@ export default function ReportsPage() {
         body: summaryData,
         startY: 44,
         theme: 'grid',
-        headStyles: { fillStyle: 'DF', fillColor: [241, 245, 249], textColor: [71, 85, 105], fontStyle: 'bold', fontSize: 10 },
+        headStyles: { fillColor: [241, 245, 249], textColor: [71, 85, 105], fontStyle: 'bold', fontSize: 10 },
         bodyStyles: { textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 11, halign: 'center' }
       })
 
