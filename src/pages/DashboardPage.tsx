@@ -200,27 +200,74 @@ export default function DashboardPage() {
   const handleExcelExport = async () => {
     if (!filteredRecords.length) return
     try {
-      const xlsx = await import('xlsx')
-      
-      // Define headers and data rows manually to insert formula cells
+      const ExcelJS = (await import('exceljs')).default
+      const html2canvas = (await import('html2canvas')).default
+
+      // 1. Capture Dashboard Chart elements using html2canvas
+      const chartElements = document.querySelectorAll('.glass-card')
+      const chartImages: string[] = []
+
+      // Wait a moment for rendering
+      await new Promise((resolve) => setTimeout(resolve, 150))
+
+      for (let i = 0; i < chartElements.length; i++) {
+        // Capture only the actual chart cards (indices 8 to 15 are the charts, or check by class/content)
+        const el = chartElements[i] as HTMLElement
+        const titleText = el.querySelector('h3')?.innerText || ''
+        if (titleText.includes('Trend') || titleText.includes('Composition') || titleText.includes('Margin') || titleText.includes('Collections') || titleText.includes('Breakdown') || titleText.includes('Profit') || titleText.includes('Revenue')) {
+          try {
+            const chartCanvas = await html2canvas(el, {
+              scale: 1.5,
+              useCORS: true,
+              backgroundColor: '#ffffff'
+            })
+            chartImages.push(chartCanvas.toDataURL('image/png'))
+          } catch (err) {
+            console.error('Failed capturing chart card:', err)
+          }
+        }
+      }
+
+      // 2. Create ExcelJS workbook
+      const workbook = new ExcelJS.Workbook()
+      const worksheet = workbook.addWorksheet('Financial Dashboard')
+
+      // Styling parameters
+      worksheet.views = [{ showGridLines: true }]
+
+      // Add Document Header
+      worksheet.mergeCells('A1:P1')
+      const titleCell = worksheet.getCell('A1')
+      titleCell.value = 'MIKLENS BIO - FINANCIAL PERFORMANCE REPORT'
+      titleCell.font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FFFFFFFF' } }
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } } // Slate 900
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      worksheet.getRow(1).height = 40
+
+      // Add Headers Row
       const headers = [
         'Period', 'Revenue (Lakhs)', 'COGS (Lakhs)', 'Employee Cost (Lakhs)', 'Finance Cost (Lakhs)',
         'Depreciation (Lakhs)', 'Other Expenses (Lakhs)', 'Total Expenses (Lakhs)', 'Gross Margin (Lakhs)',
         'Gross Margin %', 'Net Profit (Lakhs)', 'Net Profit %', 'Collections (Lakhs)', 'Collection Rate %',
         'Receivables (Lakhs)', 'Payables (Lakhs)'
       ]
-      
-      // SheetJS utility mapping values
-      const dataRows = filteredRecords.map((r, i) => {
-        const rowNum = i + 2 // data starts at row 2
+      worksheet.getRow(3).values = headers
+      worksheet.getRow(3).font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+      worksheet.getRow(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } } // Slate 700
+      worksheet.getRow(3).alignment = { horizontal: 'center', vertical: 'middle' }
+      worksheet.getRow(3).height = 25
+
+      // Add Data Rows with Formulas
+      filteredRecords.forEach((r, i) => {
+        const rowNum = i + 4 // starts at row 4
         const totalExpenses = r.expenses.cogs + r.expenses.employee + r.expenses.finance + r.expenses.depreciation + r.expenses.other
         const grossMargin = r.revenue - r.expenses.cogs
         const grossMarginPercent = r.revenue > 0 ? (grossMargin / r.revenue) : 0
         const netProfit = grossMargin - (r.expenses.employee + r.expenses.finance + r.expenses.depreciation + r.expenses.other)
         const netProfitPercent = r.revenue > 0 ? (netProfit / r.revenue) : 0
         const collectionPercent = r.revenue > 0 ? (r.collections / r.revenue) : 0
-        
-        return [
+
+        const rowValues = [
           `${r.month} ${r.year}`, // A
           r.revenue,             // B
           r.expenses.cogs,       // C
@@ -228,20 +275,35 @@ export default function DashboardPage() {
           r.expenses.finance,    // E
           r.expenses.depreciation,// F
           r.expenses.other,      // G
-          { t: 'n', f: `C${rowNum}+D${rowNum}+E${rowNum}+F${rowNum}+G${rowNum}`, v: totalExpenses }, // H
-          { t: 'n', f: `B${rowNum}-C${rowNum}`, v: grossMargin },                                  // I
-          { t: 'n', f: `IF(B${rowNum}>0, I${rowNum}/B${rowNum}, 0)`, v: grossMarginPercent, z: '0.0%' }, // J
-          { t: 'n', f: `I${rowNum}-(D${rowNum}+E${rowNum}+F${rowNum}+G${rowNum})`, v: netProfit }, // K
-          { t: 'n', f: `IF(B${rowNum}>0, K${rowNum}/B${rowNum}, 0)`, v: netProfitPercent, z: '0.0%' }, // L
+          { formula: `C${rowNum}+D${rowNum}+E${rowNum}+F${rowNum}+G${rowNum}`, result: totalExpenses }, // H
+          { formula: `B${rowNum}-C${rowNum}`, result: grossMargin },                                  // I
+          { formula: `IF(B${rowNum}>0, I${rowNum}/B${rowNum}, 0)`, result: grossMarginPercent },       // J
+          { formula: `I${rowNum}-(D${rowNum}+E${rowNum}+F${rowNum}+G${rowNum})`, result: netProfit }, // K
+          { formula: `IF(B${rowNum}>0, K${rowNum}/B${rowNum}, 0)`, result: netProfitPercent },       // L
           r.collections,         // M
-          { t: 'n', f: `IF(B${rowNum}>0, M${rowNum}/B${rowNum}, 0)`, v: collectionPercent, z: '0.0%' }, // N
+          { formula: `IF(B${rowNum}>0, M${rowNum}/B${rowNum}, 0)`, result: collectionPercent },       // N
           r.receivables,         // O
           r.payables             // P
         ]
+        
+        const row = worksheet.addRow(rowValues)
+        row.height = 20
+        row.alignment = { vertical: 'middle' }
+        row.getCell(1).alignment = { horizontal: 'center' }
+        
+        // Format numeric columns
+        for (let col = 2; col <= 16; col++) {
+          const cell = row.getCell(col)
+          if (col === 10 || col === 12 || col === 14) {
+            cell.numFmt = '0.0%'
+          } else {
+            cell.numFmt = '#,##0.00'
+          }
+        }
       })
 
-      // Add a summary total row at the end
-      const totalRowNum = dataRows.length + 2
+      // Add Totals Row
+      const totalRowNum = filteredRecords.length + 4
       const aggRevenue = filteredRecords.reduce((s, r) => s + r.revenue, 0)
       const aggCOGS = filteredRecords.reduce((s, r) => s + r.expenses.cogs, 0)
       const aggEmployee = filteredRecords.reduce((s, r) => s + r.expenses.employee, 0)
@@ -258,49 +320,78 @@ export default function DashboardPage() {
       const aggReceivables = filteredRecords.reduce((s, r) => s + r.receivables, 0)
       const aggPayables = filteredRecords.reduce((s, r) => s + r.payables, 0)
 
-      dataRows.push([
+      const totalsRowValues = [
         'TOTALS',
-        { t: 'n', f: `SUM(B2:B${totalRowNum-1})`, v: aggRevenue },
-        { t: 'n', f: `SUM(C2:C${totalRowNum-1})`, v: aggCOGS },
-        { t: 'n', f: `SUM(D2:D${totalRowNum-1})`, v: aggEmployee },
-        { t: 'n', f: `SUM(E2:E${totalRowNum-1})`, v: aggFinance },
-        { t: 'n', f: `SUM(F2:F${totalRowNum-1})`, v: aggDepr },
-        { t: 'n', f: `SUM(G2:G${totalRowNum-1})`, v: aggOther },
-        { t: 'n', f: `SUM(H2:H${totalRowNum-1})`, v: aggTotalExp },
-        { t: 'n', f: `SUM(I2:I${totalRowNum-1})`, v: aggGrossMargin },
-        { t: 'n', f: `AVERAGE(J2:J${totalRowNum-1})`, v: aggGrossMarginPercent, z: '0.0%' },
-        { t: 'n', f: `SUM(K2:K${totalRowNum-1})`, v: aggNetProfit },
-        { t: 'n', f: `AVERAGE(L2:L${totalRowNum-1})`, v: aggNetProfitPercent, z: '0.0%' },
-        { t: 'n', f: `SUM(M2:M${totalRowNum-1})`, v: aggCollections },
-        { t: 'n', f: `AVERAGE(N2:N${totalRowNum-1})`, v: aggCollectionPercent, z: '0.0%' },
-        { t: 'n', f: `SUM(O2:O${totalRowNum-1})`, v: aggReceivables },
-        { t: 'n', f: `SUM(P2:P${totalRowNum-1})`, v: aggPayables }
-      ])
-
-      // Format column widths for professional presentation
-      const worksheet = xlsx.utils.aoa_to_sheet([headers, ...dataRows])
-      worksheet['!cols'] = [
-        { wch: 12 }, // Period
-        { wch: 15 }, // Revenue
-        { wch: 15 }, // COGS
-        { wch: 15 }, // Employee Cost
-        { wch: 15 }, // Finance Cost
-        { wch: 15 }, // Depreciation
-        { wch: 15 }, // Other Expenses
-        { wch: 18 }, // Total Expenses
-        { wch: 18 }, // Gross Margin
-        { wch: 15 }, // Gross Margin %
-        { wch: 18 }, // Net Profit
-        { wch: 15 }, // Net Profit %
-        { wch: 18 }, // Collections
-        { wch: 18 }, // Collection Rate %
-        { wch: 18 }, // Receivables
-        { wch: 18 }  // Payables
+        { formula: `SUM(B4:B${totalRowNum-1})`, result: aggRevenue },
+        { formula: `SUM(C4:C${totalRowNum-1})`, result: aggCOGS },
+        { formula: `SUM(D4:D${totalRowNum-1})`, result: aggEmployee },
+        { formula: `SUM(E4:E${totalRowNum-1})`, result: aggFinance },
+        { formula: `SUM(F4:F${totalRowNum-1})`, result: aggDepr },
+        { formula: `SUM(G4:G${totalRowNum-1})`, result: aggOther },
+        { formula: `SUM(H4:H${totalRowNum-1})`, result: aggTotalExp },
+        { formula: `SUM(I4:I${totalRowNum-1})`, result: aggGrossMargin },
+        { formula: `AVERAGE(J4:J${totalRowNum-1})`, result: aggGrossMarginPercent },
+        { formula: `SUM(K4:K${totalRowNum-1})`, result: aggNetProfit },
+        { formula: `AVERAGE(L4:L${totalRowNum-1})`, result: aggNetProfitPercent },
+        { formula: `SUM(M4:M${totalRowNum-1})`, result: aggCollections },
+        { formula: `AVERAGE(N4:N${totalRowNum-1})`, result: aggCollectionPercent },
+        { formula: `SUM(O4:O${totalRowNum-1})`, result: aggReceivables },
+        { formula: `SUM(P4:P${totalRowNum-1})`, result: aggPayables }
       ]
+      
+      const totalRow = worksheet.addRow(totalsRowValues)
+      totalRow.height = 22
+      totalRow.font = { name: 'Arial', size: 10, bold: true }
+      totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } } // slate 200
+      totalRow.alignment = { vertical: 'middle' }
+      totalRow.getCell(1).alignment = { horizontal: 'center' }
+      
+      for (let col = 2; col <= 16; col++) {
+        const cell = totalRow.getCell(col)
+        if (col === 10 || col === 12 || col === 14) {
+          cell.numFmt = '0.0%'
+        } else {
+          cell.numFmt = '#,##0.00'
+        }
+      }
 
-      const workbook = xlsx.utils.book_new()
-      xlsx.utils.book_append_sheet(workbook, worksheet, 'Dashboard Data')
-      xlsx.writeFile(workbook, `Miklens_Dashboard_Formulas_${new Date().toLocaleDateString()}.xlsx`)
+      // Auto-fit Column Widths
+      worksheet.columns.forEach((column) => {
+        column.width = 18
+      })
+      worksheet.getColumn(1).width = 14 // Period
+
+      // 3. Embed captured chart images into the sheet below the data
+      let imageRowPosition = totalRowNum + 3
+      chartImages.forEach((imgBase64, index) => {
+        try {
+          const imageId = workbook.addImage({
+            base64: imgBase64,
+            extension: 'png',
+          })
+          
+          // Place 2 charts per row
+          const colOffset = (index % 2 === 0) ? 'A' : 'I'
+          const startRow = imageRowPosition + Math.floor(index / 2) * 16
+          
+          worksheet.addImage(imageId, {
+            tl: { col: (index % 2 === 0) ? 0 : 8, row: startRow },
+            ext: { width: 500, height: 280 }
+          })
+        } catch (e) {
+          console.error('Failed to embed chart image in Excel:', e)
+        }
+      })
+
+      // 4. Save workbook
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Miklens_Executive_Dashboard_${new Date().toLocaleDateString()}.xlsx`
+      a.click()
+      window.URL.revokeObjectURL(url)
     } catch (e) {
       console.error('Failed to export Excel:', e)
     }
