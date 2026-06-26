@@ -213,6 +213,13 @@ export default function DashboardPage() {
       // SheetJS utility mapping values
       const dataRows = filteredRecords.map((r, i) => {
         const rowNum = i + 2 // 1-indexed header is row 1, data starts at row 2
+        const totalExpenses = r.expenses.cogs + r.expenses.employee + r.expenses.finance + r.expenses.depreciation + r.expenses.other
+        const grossMargin = r.revenue - r.expenses.cogs
+        const grossMarginPercent = r.revenue > 0 ? (grossMargin / r.revenue) : 0
+        const netProfit = grossMargin - (r.expenses.employee + r.expenses.finance + r.expenses.depreciation + r.expenses.other)
+        const netProfitPercent = r.revenue > 0 ? (netProfit / r.revenue) : 0
+        const collectionPercent = r.revenue > 0 ? (r.collections / r.revenue) : 0
+        
         return [
           `${r.month} ${r.year}`, // A
           r.revenue,             // B
@@ -221,13 +228,13 @@ export default function DashboardPage() {
           r.expenses.finance,    // E
           r.expenses.depreciation,// F
           r.expenses.other,      // G
-          { t: 'n', f: `C${rowNum}+D${rowNum}+E${rowNum}+F${rowNum}+G${rowNum}` }, // H: Total Expenses = COGS + Opex
-          { t: 'n', f: `B${rowNum}-C${rowNum}` },                                // I: Gross Margin = Revenue - COGS
-          { t: 'n', f: `IF(B${rowNum}>0, I${rowNum}/B${rowNum}, 0)`, z: '0.0%' }, // J: Gross Margin % = Gross Margin / Revenue
-          { t: 'n', f: `I${rowNum}-(D${rowNum}+E${rowNum}+F${rowNum}+G${rowNum})` }, // K: Net Profit = Gross Margin - Opex
-          { t: 'n', f: `IF(B${rowNum}>0, K${rowNum}/B${rowNum}, 0)`, z: '0.0%' }, // L: Net Profit % = Net Profit / Revenue
+          { t: 'n', f: `C${rowNum}+D${rowNum}+E${rowNum}+F${rowNum}+G${rowNum}`, v: totalExpenses }, // H
+          { t: 'n', f: `B${rowNum}-C${rowNum}`, v: grossMargin },                                  // I
+          { t: 'n', f: `IF(B${rowNum}>0, I${rowNum}/B${rowNum}, 0)`, v: grossMarginPercent, z: '0.0%' }, // J
+          { t: 'n', f: `I${rowNum}-(D${rowNum}+E${rowNum}+F${rowNum}+G${rowNum})`, v: netProfit }, // K
+          { t: 'n', f: `IF(B${rowNum}>0, K${rowNum}/B${rowNum}, 0)`, v: netProfitPercent, z: '0.0%' }, // L
           r.collections,         // M
-          { t: 'n', f: `IF(B${rowNum}>0, M${rowNum}/B${rowNum}, 0)`, z: '0.0%' }, // N: Collection Rate % = Collections / Revenue
+          { t: 'n', f: `IF(B${rowNum}>0, M${rowNum}/B${rowNum}, 0)`, v: collectionPercent, z: '0.0%' }, // N
           r.receivables,         // O
           r.payables             // P
         ]
@@ -235,23 +242,39 @@ export default function DashboardPage() {
 
       // Add a summary total row at the end
       const totalRowNum = dataRows.length + 2
+      const aggRevenue = filteredRecords.reduce((s, r) => s + r.revenue, 0)
+      const aggCOGS = filteredRecords.reduce((s, r) => s + r.expenses.cogs, 0)
+      const aggEmployee = filteredRecords.reduce((s, r) => s + r.expenses.employee, 0)
+      const aggFinance = filteredRecords.reduce((s, r) => s + r.expenses.finance, 0)
+      const aggDepr = filteredRecords.reduce((s, r) => s + r.expenses.depreciation, 0)
+      const aggOther = filteredRecords.reduce((s, r) => s + r.expenses.other, 0)
+      const aggTotalExp = aggCOGS + aggEmployee + aggFinance + aggDepr + aggOther
+      const aggGrossMargin = aggRevenue - aggCOGS
+      const aggGrossMarginPercent = aggRevenue > 0 ? (aggGrossMargin / aggRevenue) : 0
+      const aggNetProfit = aggGrossMargin - (aggEmployee + aggFinance + aggDepr + aggOther)
+      const aggNetProfitPercent = aggRevenue > 0 ? (aggNetProfit / aggRevenue) : 0
+      const aggCollections = filteredRecords.reduce((s, r) => s + r.collections, 0)
+      const aggCollectionPercent = aggRevenue > 0 ? (aggCollections / aggRevenue) : 0
+      const aggReceivables = filteredRecords.reduce((s, r) => s + r.receivables, 0)
+      const aggPayables = filteredRecords.reduce((s, r) => s + r.payables, 0)
+
       dataRows.push([
         'TOTALS',
-        { t: 'n', f: `SUM(B2:B${totalRowNum-1})` },
-        { t: 'n', f: `SUM(C2:C${totalRowNum-1})` },
-        { t: 'n', f: `SUM(D2:D${totalRowNum-1})` },
-        { t: 'n', f: `SUM(E2:E${totalRowNum-1})` },
-        { t: 'n', f: `SUM(F2:F${totalRowNum-1})` },
-        { t: 'n', f: `SUM(G2:G${totalRowNum-1})` },
-        { t: 'n', f: `SUM(H2:H${totalRowNum-1})` },
-        { t: 'n', f: `SUM(I2:I${totalRowNum-1})` },
-        { t: 'n', f: `AVERAGE(J2:J${totalRowNum-1})`, z: '0.0%' },
-        { t: 'n', f: `SUM(K2:K${totalRowNum-1})` },
-        { t: 'n', f: `AVERAGE(L2:L${totalRowNum-1})`, z: '0.0%' },
-        { t: 'n', f: `SUM(M2:M${totalRowNum-1})` },
-        { t: 'n', f: `AVERAGE(N2:N${totalRowNum-1})`, z: '0.0%' },
-        { t: 'n', f: `SUM(O2:O${totalRowNum-1})` },
-        { t: 'n', f: `SUM(P2:P${totalRowNum-1})` }
+        { t: 'n', f: `SUM(B2:B${totalRowNum-1})`, v: aggRevenue },
+        { t: 'n', f: `SUM(C2:C${totalRowNum-1})`, v: aggCOGS },
+        { t: 'n', f: `SUM(D2:D${totalRowNum-1})`, v: aggEmployee },
+        { t: 'n', f: `SUM(E2:E${totalRowNum-1})`, v: aggFinance },
+        { t: 'n', f: `SUM(F2:F${totalRowNum-1})`, v: aggDepr },
+        { t: 'n', f: `SUM(G2:G${totalRowNum-1})`, v: aggOther },
+        { t: 'n', f: `SUM(H2:H${totalRowNum-1})`, v: aggTotalExp },
+        { t: 'n', f: `SUM(I2:I${totalRowNum-1})`, v: aggGrossMargin },
+        { t: 'n', f: `AVERAGE(J2:J${totalRowNum-1})`, v: aggGrossMarginPercent, z: '0.0%' },
+        { t: 'n', f: `SUM(K2:K${totalRowNum-1})`, v: aggNetProfit },
+        { t: 'n', f: `AVERAGE(L2:L${totalRowNum-1})`, v: aggNetProfitPercent, z: '0.0%' },
+        { t: 'n', f: `SUM(M2:M${totalRowNum-1})`, v: aggCollections },
+        { t: 'n', f: `AVERAGE(N2:N${totalRowNum-1})`, v: aggCollectionPercent, z: '0.0%' },
+        { t: 'n', f: `SUM(O2:O${totalRowNum-1})`, v: aggReceivables },
+        { t: 'n', f: `SUM(P2:P${totalRowNum-1})`, v: aggPayables }
       ])
 
       const worksheet = xlsx.utils.aoa_to_sheet([headers, ...dataRows])
