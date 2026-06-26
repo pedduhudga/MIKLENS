@@ -380,6 +380,13 @@ export default function DataEntryPage() {
         success(`${data.month} ${data.year} updated successfully!`)
         setEditingId(null)
       } else {
+        // Warning before overwriting existing data for the same month/year
+        if (enteredMonths.has(data.month)) {
+          if (!confirm(`Data for ${data.month} ${data.year} already exists. Overwrite?`)) {
+            setIsSubmitting(false)
+            return
+          }
+        }
         const id = await createRecord(record)
         await auditRepository.log({
           userId: user?.uid || '',
@@ -435,6 +442,7 @@ export default function DataEntryPage() {
       action: 'delete',
       entityType: 'financial',
       entityId: id,
+      oldValue: JSON.stringify(record), // Save entire deleted record for data-loss prevention
     })
     success('Record deleted.')
     if (editingId === id) {

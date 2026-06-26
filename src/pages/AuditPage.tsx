@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Plus, Edit, Trash, LogIn } from 'lucide-react'
+import { Shield, Plus, Edit, Trash, LogIn, RotateCcw } from 'lucide-react'
 import { auditRepository } from '@/services/auditRepository'
 import type { AuditLog } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useToast } from '@/components/ui/toast-provider'
+import { useFinancialActions } from '@/hooks/useFinancialData'
+import { useAuth } from '@/hooks/useAuth'
 
 const actionConfig = {
   create: { label: 'Created', icon: Plus, variant: 'success' as const },
@@ -17,6 +20,38 @@ const actionConfig = {
 export default function AuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [restoringId, setRestoringId] = useState<string | null>(null)
+
+  const { createRecord } = useFinancialActions()
+  const { canWrite } = useAuth()
+  const { success, error: toastError } = useToast()
+
+  const handleRestore = async (log: AuditLog) => {
+    if (!canWrite()) {
+      toastError('You do not have permission to restore data.')
+      return
+    }
+    if (!log.oldValue) {
+      toastError('No backup data found for this record.')
+      return
+    }
+    if (!confirm('Are you sure you want to restore this deleted record?')) return
+
+    setRestoringId(log.id || null)
+    try {
+      const parsedRecord = JSON.parse(log.oldValue)
+      delete parsedRecord.id
+      await createRecord(parsedRecord)
+      success(`Successfully restored record for ${parsedRecord.month} ${parsedRecord.year}!`)
+      // Refresh logs
+      const data = await auditRepository.getRecent(100)
+      setLogs(data)
+    } catch (err: any) {
+      toastError(err.message || 'Failed to restore record.')
+    } finally {
+      setRestoringId(null)
+    }
+  }
 
   useEffect(() => {
     auditRepository.getRecent(100).then(data => {
@@ -87,6 +122,17 @@ export default function AuditPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
+                    {log.action === 'delete' && log.entityType === 'financial' && log.oldValue && (
+                      <button
+                        onClick={() => handleRestore(log)}
+                        disabled={restoringId === log.id}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-500 hover:bg-emerald-500/10 px-2 py-1 rounded transition-colors disabled:opacity-50 border border-emerald-500/20"
+                        title="Restore Deleted Record"
+                      >
+                        <RotateCcw size={10} className={restoringId === log.id ? 'animate-spin' : ''} />
+                        Restore
+                      </button>
+                    )}
                     <Badge variant={config.variant}>{config.label}</Badge>
                     <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {log.timestamp instanceof Date
