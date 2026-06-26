@@ -212,7 +212,7 @@ export default function DashboardPage() {
       
       // SheetJS utility mapping values
       const dataRows = filteredRecords.map((r, i) => {
-        const rowNum = i + 2 // 1-indexed header is row 1, data starts at row 2
+        const rowNum = i + 2 // data starts at row 2
         const totalExpenses = r.expenses.cogs + r.expenses.employee + r.expenses.finance + r.expenses.depreciation + r.expenses.other
         const grossMargin = r.revenue - r.expenses.cogs
         const grossMarginPercent = r.revenue > 0 ? (grossMargin / r.revenue) : 0
@@ -276,6 +276,13 @@ export default function DashboardPage() {
         { t: 'n', f: `SUM(O2:O${totalRowNum-1})`, v: aggReceivables },
         { t: 'n', f: `SUM(P2:P${totalRowNum-1})`, v: aggPayables }
       ])
+
+      // Guidance on how to insert charts in Excel
+      dataRows.push([])
+      dataRows.push(['Instructions for Charts & Graphs in Excel:'])
+      dataRows.push(['1. Select the columns you want to visualize (e.g., "Period" and "Revenue").'])
+      dataRows.push(['2. In the top Excel ribbon menu, click on "Insert" > "Recommended Charts" or select a Bar/Line chart.'])
+      dataRows.push(['3. Excel will generate a native interactive chart that automatically updates whenever you modify the values above!'])
 
       const worksheet = xlsx.utils.aoa_to_sheet([headers, ...dataRows])
       const workbook = xlsx.utils.book_new()
