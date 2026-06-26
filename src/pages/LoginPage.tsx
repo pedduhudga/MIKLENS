@@ -31,9 +31,13 @@ export default function LoginPage() {
 
   const onSubmit = async (data: FormData) => {
     setIsLoading(true)
+    console.log('Login onSubmit triggered for email:', data.email)
     try {
+      console.log('Calling login function...')
       const cred = await login(data.email, data.password)
+      console.log('Login credentials returned successfully:', cred.user?.uid)
       try {
+        console.log('Attempting to log audit entry...')
         await auditRepository.log({
           userId: cred.user.uid,
           userEmail: data.email,
@@ -41,12 +45,15 @@ export default function LoginPage() {
           entityType: 'user',
           entityId: cred.user.uid,
         })
+        console.log('Audit entry logged successfully.')
       } catch (logErr) {
         console.warn('Could not write audit log to Firestore:', logErr)
       }
+      console.log('Redirecting to dashboard...')
       success('Welcome back!')
       navigate('/dashboard')
     } catch (err: any) {
+      console.error('Sign-in error caught:', err)
       const msg = err.code === 'auth/invalid-credential'
         ? 'Invalid email or password.'
         : err.message || 'Login failed.'
