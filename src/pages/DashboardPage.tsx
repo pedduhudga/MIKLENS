@@ -122,37 +122,75 @@ export default function DashboardPage() {
       const { jsPDF } = await import('jspdf')
       const html2canvas = (await import('html2canvas')).default
       
-      const dashboardElement = document.querySelector('main')
+      // Target the scrollable dashboard container or main content wrapper
+      const dashboardElement = document.querySelector('main > div') as HTMLElement
       if (!dashboardElement) return
       
-      // Temporary styling tweaks for rendering a clean PDF canvas
-      const originalStyle = dashboardElement.getAttribute('style')
-      dashboardElement.setAttribute('style', 'background-color: #f8fafc; color: #0f172a; padding: 20px;')
+      // Save scroll positions
+      const originalScrollY = window.scrollY
+      const originalScrollX = window.scrollX
+      
+      // Scroll to top to ensure complete layout capture by html2canvas
+      window.scrollTo(0, 0)
+      
+      // Force element dimensions to full contents size for snapshot
+      const originalWidth = dashboardElement.style.width
+      const originalMaxHeight = dashboardElement.style.maxHeight
+      const originalOverflow = dashboardElement.style.overflow
+      
+      dashboardElement.style.width = '1200px' // fixed page width for PDF standard aspect ratio
+      dashboardElement.style.maxHeight = 'none'
+      dashboardElement.style.overflow = 'visible'
+      
+      // Wait briefly for layout adjustment
+      await new Promise((resolve) => setTimeout(resolve, 300))
       
       const canvas = await html2canvas(dashboardElement, {
-        scale: 2, // High resolution
+        scale: 2, // High resolution crisp text and charts
         useCORS: true,
+        allowTaint: true,
         logging: false,
-        backgroundColor: '#f8fafc',
-        ignoreElements: (el) => el.tagName === 'BUTTON' || el.tagName === 'HEADER' || el.classList.contains('dashboard-filters')
+        backgroundColor: '#ffffff',
+        width: 1200,
+        height: dashboardElement.scrollHeight,
+        windowWidth: 1200,
+        windowHeight: dashboardElement.scrollHeight,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
+        ignoreElements: (el) => {
+          return el.tagName === 'BUTTON' || el.classList.contains('dashboard-filters')
+        }
       })
       
-      if (originalStyle) {
-        dashboardElement.setAttribute('style', originalStyle)
-      } else {
-        dashboardElement.removeAttribute('style')
+      // Restore layout styles
+      dashboardElement.style.width = originalWidth
+      dashboardElement.style.maxHeight = originalMaxHeight
+      dashboardElement.style.overflow = originalOverflow
+      window.scrollTo(originalScrollX, originalScrollY)
+      
+      const imgWidth = 297 // A4 Landscape width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      const pageHeight = 210 // A4 Landscape height in mm
+      
+      const pdf = new jsPDF('l', 'mm', 'a4')
+      
+      // Handle multi-page or single-page fitting dynamically
+      let heightLeft = imgHeight
+      let position = 0
+      const imgData = canvas.toDataURL('image/png')
+      
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+      
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pageHeight
       }
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.95)
-      
-      // PDF initialization in landscape format
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'px',
-        format: [canvas.width, canvas.height]
-      })
-      
-      pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height)
       pdf.save(`Miklens_Financial_Dashboard_${new Date().toLocaleDateString()}.pdf`)
     } catch (e) {
       console.error('Failed to export PDF:', e)
