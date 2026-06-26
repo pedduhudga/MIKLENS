@@ -117,6 +117,80 @@ export default function DashboardPage() {
     ]
   }, [latestRecord, previousRecord])
 
+  const handlePDFExport = async () => {
+    try {
+      const { jsPDF } = await import('jspdf')
+      const html2canvas = (await import('html2canvas')).default
+      
+      const dashboardElement = document.querySelector('main')
+      if (!dashboardElement) return
+      
+      // Temporary styling tweaks for rendering a clean PDF canvas
+      const originalStyle = dashboardElement.getAttribute('style')
+      dashboardElement.setAttribute('style', 'background-color: #f8fafc; color: #0f172a; padding: 20px;')
+      
+      const canvas = await html2canvas(dashboardElement, {
+        scale: 2, // High resolution
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#f8fafc',
+        ignoreElements: (el) => el.tagName === 'BUTTON' || el.tagName === 'HEADER' || el.classList.contains('dashboard-filters')
+      })
+      
+      if (originalStyle) {
+        dashboardElement.setAttribute('style', originalStyle)
+      } else {
+        dashboardElement.removeAttribute('style')
+      }
+      
+      const imgData = canvas.toDataURL('image/jpeg', 0.95)
+      
+      // PDF initialization in landscape format
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'px',
+        format: [canvas.width, canvas.height]
+      })
+      
+      pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height)
+      pdf.save(`Miklens_Financial_Dashboard_${new Date().toLocaleDateString()}.pdf`)
+    } catch (e) {
+      console.error('Failed to export PDF:', e)
+    }
+  }
+
+  const handleExcelExport = async () => {
+    if (!filteredRecords.length) return
+    try {
+      const xlsx = await import('xlsx')
+      const rows = filteredRecords.map(r => ({
+        'Period': `${r.month} ${r.year}`,
+        'Revenue (Lakhs)': r.revenue,
+        'COGS (Lakhs)': r.expenses.cogs,
+        'Employee Cost (Lakhs)': r.expenses.employee,
+        'Finance Cost (Lakhs)': r.expenses.finance,
+        'Depreciation (Lakhs)': r.expenses.depreciation,
+        'Other Expenses (Lakhs)': r.expenses.other,
+        'Total Expenses (Lakhs)': r.metrics.totalExpenses,
+        'Gross Margin (Lakhs)': r.metrics.grossMargin,
+        'Gross Margin %': `${r.metrics.grossMarginPercent.toFixed(1)}%`,
+        'Net Profit (Lakhs)': r.metrics.netMargin,
+        'Net Profit %': `${r.metrics.netMarginPercent.toFixed(1)}%`,
+        'Collections (Lakhs)': r.collections,
+        'Collection Rate %': `${r.metrics.collectionPercent.toFixed(1)}%`,
+        'Receivables (Lakhs)': r.receivables,
+        'Payables (Lakhs)': r.payables
+      }))
+
+      const worksheet = xlsx.utils.json_to_sheet(rows)
+      const workbook = xlsx.utils.book_new()
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Dashboard Data')
+      xlsx.writeFile(workbook, `Miklens_Dashboard_Data_${new Date().toLocaleDateString()}.xlsx`)
+    } catch (e) {
+      console.error('Failed to export Excel:', e)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -131,7 +205,25 @@ export default function DashboardPage() {
             Real-time business intelligence overview
           </p>
         </div>
-        <DashboardFilters />
+        <div className="flex flex-wrap items-center gap-3">
+          <DashboardFilters />
+          <div className="flex gap-2">
+            <button
+              onClick={handleExcelExport}
+              disabled={isLoading || !filteredRecords.length}
+              className="h-9 px-3 text-xs font-semibold rounded-lg border border-input bg-background hover:bg-accent text-foreground flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              Excel
+            </button>
+            <button
+              onClick={handlePDFExport}
+              disabled={isLoading}
+              className="h-9 px-3 text-xs font-semibold rounded-lg gradient-primary text-white flex items-center gap-1.5 shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50"
+            >
+              Export PDF
+            </button>
+          </div>
+        </div>
       </motion.div>
 
       {/* KPI Grid */}
