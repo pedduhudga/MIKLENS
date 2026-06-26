@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { motion } from 'framer-motion'
-import { Save, Trash2, Copy, Plus, Edit2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Save, Trash2, Copy, Plus, Edit2, Upload, FileSpreadsheet, Check, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import * as XLSX from 'xlsx'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -75,6 +76,180 @@ const formSections = [
   },
 ]
 
+const MONTH_MAP: { [key: string]: string } = {
+  jan: 'January', feb: 'February', mar: 'March', apr: 'April', may: 'May', jun: 'June',
+  jul: 'July', aug: 'August', sep: 'September', oct: 'October', nov: 'November', dec: 'December'
+}
+
+function parseCleanNumber(val: any): number {
+  if (val === undefined || val === null || val === '') return 0
+  if (typeof val === 'number') return val
+  let str = String(val).trim()
+  str = str.replace(/[₹%,]/g, '')
+  if (str.startsWith('(') && str.endsWith(')')) {
+    str = '-' + str.slice(1, -1)
+  }
+  const parsed = parseFloat(str)
+  return isNaN(parsed) ? 0 : parsed
+}
+
+function parseHeaderMonthYear(header: string) {
+  const clean = String(header).trim()
+  const match = clean.match(/^([A-Za-z]{3})[-']?(\d{2}|\d{4})$/)
+  if (match) {
+    const mStr = match[1].toLowerCase()
+    const yStr = match[2]
+    const month = MONTH_MAP[mStr]
+    let year = parseInt(yStr)
+    if (yStr.length === 2) {
+      year = 2000 + year
+    }
+    if (month && !isNaN(year)) {
+      return { month, year }
+    }
+  }
+  const lowerClean = clean.toLowerCase()
+  for (const [key, val] of Object.entries(MONTH_MAP)) {
+    if (lowerClean.includes(key)) {
+      const yearMatch = clean.match(/\b(\d{4}|\d{2})\b/)
+      if (yearMatch) {
+        let year = parseInt(yearMatch[1])
+        if (yearMatch[1].length === 2) year = 2000 + year
+        return { month: val, year }
+      }
+    }
+  }
+  return null
+}
+
+function parseSpreadsheet2D(grid: any[][]) {
+  if (!grid || grid.length === 0) return null
+
+  let headerRowIndex = -1
+  for (let i = 0; i < Math.min(grid.length, 10); i++) {
+    const row = grid[i]
+    if (row && row.some(cell => {
+      const s = String(cell).toLowerCase()
+      return s.includes('particular') || s.includes('ltd') || parseHeaderMonthYear(s) !== null
+    })) {
+      headerRowIndex = i
+      break
+    }
+  }
+
+  if (headerRowIndex === -1) {
+    headerRowIndex = 0
+  }
+
+  const headers = grid[headerRowIndex] || []
+  
+  interface ColInfo {
+    colIndex: number;
+    header: string;
+    month: string;
+    year: number;
+  }
+  const monthCols: ColInfo[] = []
+
+  for (let c = 1; c < headers.length; c++) {
+    const parsed = parseHeaderMonthYear(headers[c])
+    if (parsed) {
+      monthCols.push({
+        colIndex: c,
+        header: String(headers[c]),
+        month: parsed.month,
+        year: parsed.year
+      })
+    }
+  }
+
+  if (monthCols.length === 0) {
+    return null
+  }
+
+  const results = monthCols.map(col => {
+    const values: { [key: string]: number } = {
+      revenue: 0,
+      exportSales: 0,
+      b2bSales: 0,
+      retailSales: 0,
+      bulkSales: 0,
+      cogs: 0,
+      employeeCost: 0,
+      financeCost: 0,
+      depreciation: 0,
+      otherExpenses: 0,
+      collections: 0,
+      receivables: 0,
+      payables: 0,
+    }
+
+    let currentSection: 'revenue' | 'collection' | 'none' = 'none'
+
+    for (let r = headerRowIndex + 1; r < grid.length; r++) {
+      const row = grid[r]
+      if (!row || row.length === 0) continue
+      const label = String(row[0] || '').trim().toLowerCase()
+      if (!label) continue
+
+      const rawVal = row[col.colIndex]
+      const val = parseCleanNumber(rawVal)
+
+      if (label.includes('revenue')) {
+        currentSection = 'revenue'
+        values.revenue = val
+        continue
+      }
+      if (label.includes('collection')) {
+        currentSection = 'collection'
+        values.collections = val
+        continue
+      }
+
+      if (label.includes('export')) {
+        if (currentSection === 'revenue') {
+          values.exportSales = val
+        }
+      } else if (label.includes('b2b')) {
+        if (currentSection === 'revenue') {
+          values.b2bSales = val
+        }
+      } else if (label.includes('retail')) {
+        if (currentSection === 'revenue') {
+          values.retailSales = val
+        }
+      } else if (label.includes('bulk sales') || label.includes('bulk')) {
+        if (currentSection === 'revenue') {
+          values.bulkSales = val
+        }
+      } else if (label.includes('cogs')) {
+        values.cogs = val
+      } else if (label.includes('employee')) {
+        values.employeeCost = val
+      } else if (label.includes('finance')) {
+        values.financeCost = val
+      } else if (label.includes('depreciation') || label.includes('amorti')) {
+        values.depreciation = val
+      } else if (label.includes('other expense')) {
+        values.otherExpenses += val
+      } else if (label.includes('receivable')) {
+        values.receivables = val
+      } else if (label.includes('payable')) {
+        values.payables = val
+      }
+    }
+
+    return {
+      month: col.month,
+      year: col.year,
+      header: col.header,
+      values
+    }
+  })
+
+  return results
+}
+
 function NumberInput({ label, name, register, error }: { label: string; name: string; register: any; error?: any }) {
   return (
     <div className="space-y-1.5">
@@ -110,6 +285,13 @@ export default function DataEntryPage() {
   const [selectedYear, setSelectedYear] = useState(currentFY)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Auto-fill state variables
+  const [autoFillMode, setAutoFillMode] = useState<'upload' | 'paste'>('upload')
+  const [pasteText, setPasteText] = useState('')
+  const [parsedColumns, setParsedColumns] = useState<any[] | null>(null)
+  const [selectedColIndex, setSelectedColIndex] = useState<number>(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const {
     register,
     handleSubmit,
@@ -132,6 +314,24 @@ export default function DataEntryPage() {
 
   const watchYear = watch('year')
   const watchMonth = watch('month')
+
+  const applyParsedData = (col: any) => {
+    setValue('year', col.year)
+    setValue('month', col.month)
+    setValue('revenue', col.values.revenue)
+    setValue('exportSales', col.values.exportSales)
+    setValue('b2bSales', col.values.b2bSales)
+    setValue('retailSales', col.values.retailSales)
+    setValue('bulkSales', col.values.bulkSales)
+    setValue('cogs', col.values.cogs)
+    setValue('employeeCost', col.values.employeeCost)
+    setValue('financeCost', col.values.financeCost)
+    setValue('depreciation', col.values.depreciation)
+    setValue('otherExpenses', col.values.otherExpenses)
+    setValue('collections', col.values.collections)
+    setValue('receivables', col.values.receivables)
+    setValue('payables', col.values.payables)
+  }
 
   const yearRecords = enrichedRecords.filter(r => r.year === selectedYear)
   const enteredMonths = new Set(yearRecords.map(r => r.month))
@@ -256,8 +456,161 @@ export default function DataEntryPage() {
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold">{editingId ? 'Edit Financial Data' : 'Monthly Data Entry'}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Enter summarized monthly financial data from Tally
+          Enter summarized monthly financial data from Tally manually or auto-fill using an Excel/spreadsheet file.
         </p>
+      </motion.div>
+
+      {/* Auto-fill Panel */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card rounded-2xl p-5 border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background"
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+              <FileSpreadsheet className="text-white" size={20} />
+            </div>
+            <div>
+              <h2 className="font-semibold text-base">Intelligent Auto-Fill</h2>
+              <p className="text-xs text-muted-foreground">Upload Excel template or paste copied data to instantly populate form</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant={autoFillMode === 'upload' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setAutoFillMode('upload')}
+              className="text-xs rounded-full"
+            >
+              Upload Excel
+            </Button>
+            <Button
+              variant={autoFillMode === 'paste' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setAutoFillMode('paste')}
+              className="text-xs rounded-full"
+            >
+              Paste Cells
+            </Button>
+          </div>
+        </div>
+
+        {autoFillMode === 'upload' ? (
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-muted-foreground/20 hover:border-primary/50 rounded-xl p-8 text-center cursor-pointer transition-colors bg-accent/20 hover:bg-accent/40"
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                const reader = new FileReader()
+                reader.onload = (evt) => {
+                  const bstr = evt.target?.result
+                  const wb = XLSX.read(bstr, { type: 'binary' })
+                  const wsname = wb.SheetNames[0]
+                  const ws = wb.Sheets[wsname]
+                  const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][]
+                  const results = parseSpreadsheet2D(data)
+                  if (results && results.length > 0) {
+                    setParsedColumns(results)
+                    setSelectedColIndex(0)
+                    applyParsedData(results[0])
+                    success(`Successfully parsed ${results.length} month column(s) from sheet.`)
+                  } else {
+                    toastError('Could not find any month-year columns (e.g. Apr-26) in the template.')
+                  }
+                }
+                reader.readAsBinaryString(file)
+              }}
+            />
+            <Upload className="mx-auto text-muted-foreground mb-2" size={28} />
+            <p className="text-sm font-medium">Click to select or drag & drop corporate Excel file</p>
+            <p className="text-xs text-muted-foreground mt-1">Supports .xlsx, .xls, .csv templates</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <textarea
+              value={pasteText}
+              onChange={(e) => {
+                const text = e.target.value
+                setPasteText(text)
+                if (!text.trim()) return
+                // Parse TSV/CSV from pasted cells
+                const rows = text.split('\n').map(line => line.split('\t'))
+                const results = parseSpreadsheet2D(rows)
+                if (results && results.length > 0) {
+                  setParsedColumns(results)
+                  setSelectedColIndex(0)
+                  applyParsedData(results[0])
+                  success(`Successfully parsed ${results.length} month column(s) from pasted text.`)
+                } else {
+                  // try simple comma separation fallback
+                  const csvRows = text.split('\n').map(line => line.split(','))
+                  const resultsCsv = parseSpreadsheet2D(csvRows)
+                  if (resultsCsv && resultsCsv.length > 0) {
+                    setParsedColumns(resultsCsv)
+                    setSelectedColIndex(0)
+                    applyParsedData(resultsCsv[0])
+                    success(`Successfully parsed ${resultsCsv.length} month column(s) from pasted CSV text.`)
+                  } else {
+                    toastError('Could not find any matching columns in the pasted data.')
+                  }
+                }
+              }}
+              rows={3}
+              placeholder="Paste cells directly from your Excel sheet here (e.g. select Particular and LTD / Monthly columns and paste)..."
+              className="w-full px-3 py-2 rounded-xl border border-input bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
+            />
+          </div>
+        )}
+
+        <AnimatePresence>
+          {parsedColumns && parsedColumns.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-4 pt-4 border-t border-border space-y-3"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Select Month Column to Auto-Fill:</span>
+                {parsedColumns.map((col, idx) => (
+                  <Button
+                    key={idx}
+                    variant={selectedColIndex === idx ? 'default' : 'outline'}
+                    size="sm"
+                    className="text-xs h-7 px-3 rounded-full"
+                    onClick={() => {
+                      setSelectedColIndex(idx)
+                      applyParsedData(col)
+                    }}
+                  >
+                    {col.header} ({col.month} {col.year})
+                  </Button>
+                ))}
+              </div>
+
+              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3 flex gap-2.5 items-start">
+                <Check className="text-emerald-500 shrink-0 mt-0.5" size={16} />
+                <div>
+                  <p className="text-xs font-medium text-emerald-800 dark:text-emerald-400">Intelligently Mapped Fields for {parsedColumns[selectedColIndex].month} {parsedColumns[selectedColIndex].year}:</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 mt-1.5 text-[11px] text-muted-foreground">
+                    <div>Revenue: ₹{(parsedColumns[selectedColIndex].values.revenue).toLocaleString('en-IN')}</div>
+                    <div>COGS: ₹{(parsedColumns[selectedColIndex].values.cogs).toLocaleString('en-IN')}</div>
+                    <div>Collections: ₹{(parsedColumns[selectedColIndex].values.collections).toLocaleString('en-IN')}</div>
+                    <div>Receivables: ₹{(parsedColumns[selectedColIndex].values.receivables).toLocaleString('en-IN')}</div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
