@@ -33,13 +33,17 @@ export default function LoginPage() {
     setIsLoading(true)
     try {
       const cred = await login(data.email, data.password)
-      await auditRepository.log({
-        userId: cred.user.uid,
-        userEmail: data.email,
-        action: 'login',
-        entityType: 'user',
-        entityId: cred.user.uid,
-      })
+      try {
+        await auditRepository.log({
+          userId: cred.user.uid,
+          userEmail: data.email,
+          action: 'login',
+          entityType: 'user',
+          entityId: cred.user.uid,
+        })
+      } catch (logErr) {
+        console.warn('Could not write audit log to Firestore:', logErr)
+      }
       success('Welcome back!')
       navigate('/dashboard')
     } catch (err: any) {
