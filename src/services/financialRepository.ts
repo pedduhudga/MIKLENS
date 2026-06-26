@@ -91,11 +91,13 @@ export const financialRepository = {
     })
   },
 
-  subscribeToAll(callback: (records: FinancialRecord[]) => void): Unsubscribe {
+  subscribeToAll(callback: (records: FinancialRecord[]) => void, onError?: (error: any) => void): Unsubscribe {
     const q = query(collection(db, COLLECTION), orderBy('year'))
     return onSnapshot(q, snap => {
       const records = snap.docs.map(d => ({ id: d.id, ...d.data() } as FinancialRecord))
       callback(records)
+    }, error => {
+      if (onError) onError(error)
     })
   },
 }

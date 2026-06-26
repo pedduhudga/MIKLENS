@@ -11,10 +11,18 @@ export function useFinancialData() {
     if (!user) return
 
     setLoading(true)
-    const unsubscribe = financialRepository.subscribeToAll((records) => {
-      setRecords(records)
-      setLoading(false)
-    })
+    const unsubscribe = financialRepository.subscribeToAll(
+      (records) => {
+        setRecords(records)
+        setLoading(false)
+        setError(null)
+      },
+      (err) => {
+        console.error('Firestore subscription failed:', err)
+        setError(err.message || 'Failed to sync financial data')
+        setLoading(false)
+      }
+    )
 
     return () => unsubscribe()
   }, [user, setRecords, setLoading, setError])
