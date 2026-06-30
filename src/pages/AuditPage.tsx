@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast-provider'
 import { useFinancialActions } from '@/hooks/useFinancialData'
 import { useAuth } from '@/hooks/useAuth'
+import { getDocumentId } from '@/lib/utils'
 
 const actionConfig = {
   create: { label: 'Created', icon: Plus, variant: 'success' as const },
@@ -43,7 +44,18 @@ export default function AuditPage() {
     try {
       const parsedRecord = JSON.parse(dataStr)
       delete parsedRecord.id
-      await createRecord(parsedRecord)
+      await createRecord(parsedRecord, true)
+      
+      // Log the restore/rollback action in audit log
+      await auditRepository.log({
+        userId: user?.uid || '',
+        userEmail: user?.email || '',
+        action: log.action === 'delete' ? 'create' : 'update',
+        entityType: 'financial',
+        entityId: getDocumentId(parsedRecord.year, parsedRecord.month),
+        newValue: JSON.stringify(parsedRecord),
+      })
+
       success(`Successfully restored/reverted record for ${parsedRecord.month} ${parsedRecord.year}!`)
       const data = await auditRepository.getRecent(100)
       setLogs(data)
