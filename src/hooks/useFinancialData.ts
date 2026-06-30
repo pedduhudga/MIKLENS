@@ -31,9 +31,9 @@ export function useFinancialData() {
 export function useFinancialActions() {
   const { user } = useAuthStore()
 
-  const createRecord = async (data: Parameters<typeof financialRepository.create>[0]) => {
+  const createRecord = async (data: Parameters<typeof financialRepository.create>[0], allowOverwrite = false) => {
     if (!user) throw new Error('Not authenticated')
-    return financialRepository.create(data, user.uid)
+    return financialRepository.create(data, user.uid, allowOverwrite)
   }
 
   const updateRecord = async (id: string, data: Parameters<typeof financialRepository.update>[1]) => {

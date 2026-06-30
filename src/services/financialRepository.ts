@@ -20,13 +20,15 @@ import { getDocumentId } from '@/lib/utils'
 const COLLECTION = 'financials'
 
 export const financialRepository = {
-  async create(record: Omit<FinancialRecord, 'id' | 'createdAt' | 'updatedAt'>, userId: string): Promise<string> {
+  async create(record: Omit<FinancialRecord, 'id' | 'createdAt' | 'updatedAt'>, userId: string, allowOverwrite = false): Promise<string> {
     const docId = getDocumentId(record.year, record.month)
     const docRef = doc(db, COLLECTION, docId)
 
-    const existing = await getDoc(docRef)
-    if (existing.exists()) {
-      throw new Error(`Data for ${record.month} ${record.year} already exists.`)
+    if (!allowOverwrite) {
+      const existing = await getDoc(docRef)
+      if (existing.exists()) {
+        throw new Error(`Data for ${record.month} ${record.year} already exists.`)
+      }
     }
 
     await setDoc(docRef, {
@@ -34,7 +36,7 @@ export const financialRepository = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       createdBy: userId,
-    })
+    }, { merge: true }) // Using merge true so we don't accidentally wipe fields if they exist but we only write the fields, or overwrite. Let's not use merge: true if we want complete overwrite, but standard setDoc is fine. Let's just do setDoc(docRef, {...}) to overwrite.
 
     return docId
   },

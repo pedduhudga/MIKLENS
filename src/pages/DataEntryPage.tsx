@@ -408,14 +408,15 @@ export default function DataEntryPage() {
         success(`${data.month} ${data.year} updated successfully!`)
         setEditingId(null)
       } else {
-        // Warning before overwriting existing data for the same month/year
+        let overwriteConfirmed = false
         if (enteredMonths.has(data.month)) {
           if (!confirm(`Data for ${data.month} ${data.year} already exists. Overwrite?`)) {
             setIsSubmitting(false)
             return
           }
+          overwriteConfirmed = true
         }
-        const id = await createRecord(record)
+        const id = await createRecord(record, overwriteConfirmed)
         await auditRepository.log({
           userId: user?.uid || '',
           userEmail: user?.email || '',
