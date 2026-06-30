@@ -68,7 +68,7 @@ export function Sidebar() {
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <p className="text-white font-bold text-sm leading-tight">Financial MIS</p>
+              <p className="text-white font-bold text-sm leading-tight">Miklens Financial MIS</p>
               <p className="text-blue-200 text-xs">Dashboard</p>
             </motion.div>
           )}

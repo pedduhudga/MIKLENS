@@ -18,7 +18,7 @@ export function ProtectedRoute({ children }: Props) {
             <Loader2 size={28} className="text-white animate-spin" />
           </div>
           <div>
-            <p className="font-semibold text-foreground">Financial MIS</p>
+            <p className="font-semibold text-foreground">Miklens Financial MIS</p>
             <p className="text-sm text-muted-foreground">Loading dashboard...</p>
           </div>
         </div>

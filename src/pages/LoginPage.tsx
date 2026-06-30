@@ -89,7 +89,7 @@ export default function LoginPage() {
             >
               <DollarSign size={32} className="text-white" />
             </motion.div>
-            <h1 className="text-2xl font-bold text-white">Financial MIS</h1>
+            <h1 className="text-2xl font-bold text-white">Miklens Financial MIS</h1>
             <p className="text-blue-200 text-sm mt-1">Business Intelligence Dashboard</p>
           </div>
 
