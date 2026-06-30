@@ -18,104 +18,317 @@ import { calculateAggregates } from '@/lib/calculations'
 import { formatLakh, formatPercent } from '@/lib/utils'
 
 export default function DashboardPage() {
-  const { isLoading, getFilteredRecords, getLatestRecord, enrichedRecords } = useFinancialStore()
+  const { isLoading, getFilteredRecords, enrichedRecords, filter } = useFinancialStore()
 
   const filteredRecords = getFilteredRecords()
-  const latestRecord = getLatestRecord()
-  const previousRecord = enrichedRecords.length >= 2
-    ? enrichedRecords[enrichedRecords.length - 2]
-    : null
 
   const aggregates = useMemo(() => calculateAggregates(filteredRecords), [filteredRecords])
 
   const kpis = useMemo(() => {
-    const current = latestRecord
-    const prev = previousRecord
+    const isLTD = filter.year === 'all' && filter.month === 'all'
+    const isYear = filter.month === 'all' && filter.year !== 'all'
+    const isMonth = filter.month !== 'all' && filter.year !== 'all'
+
+    let revenue = 0
+    let grossMargin = 0
+    let netMargin = 0
+    let collections = 0
+    let receivables = 0
+    let payables = 0
+    let cogsPercent = 0
+    let growthPercent = 0
+
+    let changeRevenue = 0
+    let changeGrossMargin = 0
+    let changeNetMargin = 0
+    let changeCollections = 0
+    let changeReceivables = 0
+    let changePayables = 0
+    let changeCogs = 0
+    let changeGrowth = 0
+
+    let revenueChangeLabel = 'vs prev month'
+    let grossMarginChangeLabel = 'of revenue'
+    let netMarginChangeLabel = 'of revenue'
+    let collectionsChangeLabel = 'collection rate'
+    let receivablesChangeLabel = 'change'
+    let payablesChangeLabel = 'change'
+    let cogsChangeLabel = 'of revenue'
+    let growthChangeLabel = 'MoM growth'
+
+    let revenueTrend: 'up' | 'down' | 'neutral' = 'neutral'
+    let grossMarginTrend: 'up' | 'down' | 'neutral' = 'neutral'
+    let netMarginTrend: 'up' | 'down' | 'neutral' = 'neutral'
+    let collectionsTrend: 'up' | 'down' | 'neutral' = 'neutral'
+    let receivablesTrend: 'up' | 'down' | 'neutral' = 'neutral'
+    let payablesTrend: 'up' | 'down' | 'neutral' = 'neutral'
+    let cogsTrend: 'up' | 'down' | 'neutral' = 'neutral'
+    let growthTrend: 'up' | 'down' | 'neutral' = 'neutral'
+
+    let revenueStatus: 'positive' | 'negative' | 'neutral' = 'neutral'
+    let grossMarginStatus: 'positive' | 'negative' | 'neutral' = 'neutral'
+    let netMarginStatus: 'positive' | 'negative' | 'neutral' = 'neutral'
+    let collectionsStatus: 'positive' | 'negative' | 'neutral' = 'neutral'
+    let receivablesStatus: 'positive' | 'negative' | 'neutral' = 'neutral'
+    let payablesStatus: 'positive' | 'negative' | 'neutral' = 'neutral'
+    let cogsStatus: 'positive' | 'negative' | 'neutral' = 'neutral'
+    let growthStatus: 'positive' | 'negative' | 'neutral' = 'neutral'
+
+    let subtitle: string | undefined = undefined
+
+    if (isMonth) {
+      const current = filteredRecords.find(r => r.year === filter.year && r.month === filter.month)
+      const idx = enrichedRecords.findIndex(r => r.year === filter.year && r.month === filter.month)
+      const prev = idx > 0 ? enrichedRecords[idx - 1] : null
+
+      revenue = current?.revenue || 0
+      grossMargin = current?.metrics.grossMargin || 0
+      netMargin = current?.metrics.netMargin || 0
+      collections = current?.collections || 0
+      receivables = current?.receivables || 0
+      payables = current?.payables || 0
+      cogsPercent = current?.metrics.cogsPercent || 0
+      growthPercent = current?.metrics.monthlyGrowth || 0
+
+      changeRevenue = growthPercent
+      revenueChangeLabel = 'vs prev month'
+      revenueTrend = changeRevenue >= 0 ? 'up' : 'down'
+      revenueStatus = changeRevenue >= 0 ? 'positive' : 'negative'
+
+      changeGrossMargin = current?.metrics.grossMarginPercent || 0
+      grossMarginTrend = changeGrossMargin >= 30 ? 'up' : 'down'
+      grossMarginStatus = changeGrossMargin >= 30 ? 'positive' : 'negative'
+
+      changeNetMargin = current?.metrics.netMarginPercent || 0
+      netMarginTrend = changeNetMargin >= 0 ? 'up' : 'down'
+      netMarginStatus = changeNetMargin >= 0 ? 'positive' : 'negative'
+
+      changeCollections = current?.metrics.collectionPercent || 0
+      collectionsTrend = changeCollections >= 80 ? 'up' : 'down'
+      collectionsStatus = changeCollections >= 80 ? 'positive' : 'negative'
+
+      changeReceivables = prev ? (receivables - prev.receivables) : 0
+      receivablesTrend = receivables <= (prev?.receivables || 0) ? 'down' : 'up'
+      receivablesStatus = receivables <= (prev?.receivables || 0) ? 'positive' : 'negative'
+
+      changePayables = prev ? (payables - prev.payables) : 0
+      payablesTrend = payables <= (prev?.payables || 0) ? 'down' : 'up'
+      payablesStatus = payables <= (prev?.payables || 0) ? 'positive' : 'negative'
+
+      changeCogs = cogsPercent
+      cogsTrend = changeCogs <= 65 ? 'down' : 'up'
+      cogsStatus = changeCogs <= 65 ? 'positive' : 'negative'
+
+      changeGrowth = growthPercent
+      growthTrend = changeGrowth >= 0 ? 'up' : 'down'
+      growthStatus = changeGrowth >= 0 ? 'positive' : 'negative'
+
+      subtitle = current ? `${current.month} ${current.year}` : undefined
+    } else if (isYear) {
+      const currentYearRecords = filteredRecords
+      const totalRev = currentYearRecords.reduce((s, r) => s + r.revenue, 0)
+      const totalCOGS = currentYearRecords.reduce((s, r) => s + r.expenses.cogs, 0)
+      const totalGM = currentYearRecords.reduce((s, r) => s + r.metrics.grossMargin, 0)
+      const totalNM = currentYearRecords.reduce((s, r) => s + r.metrics.netMargin, 0)
+      const totalColl = currentYearRecords.reduce((s, r) => s + r.collections, 0)
+
+      const lastMonthRecord = currentYearRecords.length > 0 ? currentYearRecords[currentYearRecords.length - 1] : null
+      receivables = lastMonthRecord?.receivables || 0
+      payables = lastMonthRecord?.payables || 0
+
+      revenue = totalRev
+      grossMargin = totalGM
+      netMargin = totalNM
+      collections = totalColl
+      cogsPercent = totalRev > 0 ? (totalCOGS / totalRev) * 100 : 0
+
+      const prevYear = (filter.year as number) - 1
+      const prevYearRecords = enrichedRecords.filter(r => r.year === prevYear)
+      const prevTotalRev = prevYearRecords.reduce((s, r) => s + r.revenue, 0)
+      const prevLastRecord = prevYearRecords.length > 0 ? prevYearRecords[prevYearRecords.length - 1] : null
+
+      const yoyRevenue = prevTotalRev > 0 ? ((totalRev - prevTotalRev) / prevTotalRev) * 100 : 0
+      changeRevenue = yoyRevenue
+      revenueChangeLabel = prevTotalRev > 0 ? 'YoY growth' : 'no prior year'
+      revenueTrend = changeRevenue >= 0 ? 'up' : 'down'
+      revenueStatus = changeRevenue >= 0 ? 'positive' : 'negative'
+
+      changeGrossMargin = totalRev > 0 ? (totalGM / totalRev) * 100 : 0
+      grossMarginTrend = changeGrossMargin >= 30 ? 'up' : 'down'
+      grossMarginStatus = changeGrossMargin >= 30 ? 'positive' : 'negative'
+
+      changeNetMargin = totalRev > 0 ? (totalNM / totalRev) * 100 : 0
+      netMarginTrend = changeNetMargin >= 0 ? 'up' : 'down'
+      netMarginStatus = changeNetMargin >= 0 ? 'positive' : 'negative'
+
+      changeCollections = totalRev > 0 ? (totalColl / totalRev) * 100 : 0
+      collectionsTrend = changeCollections >= 80 ? 'up' : 'down'
+      collectionsStatus = changeCollections >= 80 ? 'positive' : 'negative'
+
+      changeReceivables = prevLastRecord ? (receivables - prevLastRecord.receivables) : 0
+      receivablesChangeLabel = prevLastRecord ? 'vs prev year end' : 'change'
+      receivablesTrend = receivables <= (prevLastRecord?.receivables || 0) ? 'down' : 'up'
+      receivablesStatus = receivables <= (prevLastRecord?.receivables || 0) ? 'positive' : 'negative'
+
+      changePayables = prevLastRecord ? (payables - prevLastRecord.payables) : 0
+      payablesChangeLabel = prevLastRecord ? 'vs prev year end' : 'change'
+      payablesTrend = payables <= (prevLastRecord?.payables || 0) ? 'down' : 'up'
+      payablesStatus = payables <= (prevLastRecord?.payables || 0) ? 'positive' : 'negative'
+
+      changeCogs = cogsPercent
+      cogsTrend = changeCogs <= 65 ? 'down' : 'up'
+      cogsStatus = changeCogs <= 65 ? 'positive' : 'negative'
+
+      growthPercent = yoyRevenue
+      changeGrowth = yoyRevenue
+      growthChangeLabel = 'YoY growth'
+      growthTrend = changeGrowth >= 0 ? 'up' : 'down'
+      growthStatus = changeGrowth >= 0 ? 'positive' : 'negative'
+
+      subtitle = `FY ${filter.year}-${String((filter.year as number) + 1).slice(2)}`
+    } else {
+      const totalRev = enrichedRecords.reduce((s, r) => s + r.revenue, 0)
+      const totalCOGS = enrichedRecords.reduce((s, r) => s + r.expenses.cogs, 0)
+      const totalGM = enrichedRecords.reduce((s, r) => s + r.metrics.grossMargin, 0)
+      const totalNM = enrichedRecords.reduce((s, r) => s + r.metrics.netMargin, 0)
+      const totalColl = enrichedRecords.reduce((s, r) => s + r.collections, 0)
+
+      const lastRecord = enrichedRecords.length > 0 ? enrichedRecords[enrichedRecords.length - 1] : null
+      receivables = lastRecord?.receivables || 0
+      payables = lastRecord?.payables || 0
+
+      revenue = totalRev
+      grossMargin = totalGM
+      netMargin = totalNM
+      collections = totalColl
+      cogsPercent = totalRev > 0 ? (totalCOGS / totalRev) * 100 : 0
+
+      changeRevenue = totalRev
+      revenueChangeLabel = 'cumulative'
+      revenueTrend = 'up'
+      revenueStatus = 'positive'
+
+      changeGrossMargin = totalRev > 0 ? (totalGM / totalRev) * 100 : 0
+      grossMarginTrend = changeGrossMargin >= 30 ? 'up' : 'down'
+      grossMarginStatus = changeGrossMargin >= 30 ? 'positive' : 'negative'
+
+      changeNetMargin = totalRev > 0 ? (totalNM / totalRev) * 100 : 0
+      netMarginTrend = changeNetMargin >= 0 ? 'up' : 'down'
+      netMarginStatus = changeNetMargin >= 0 ? 'positive' : 'negative'
+
+      changeCollections = totalRev > 0 ? (totalColl / totalRev) * 100 : 0
+      collectionsTrend = changeCollections >= 80 ? 'up' : 'down'
+      collectionsStatus = changeCollections >= 80 ? 'positive' : 'negative'
+
+      changeReceivables = 0
+      receivablesChangeLabel = 'current balance'
+      receivablesTrend = 'neutral'
+      receivablesStatus = 'neutral'
+
+      changePayables = 0
+      payablesChangeLabel = 'current balance'
+      payablesTrend = 'neutral'
+      payablesStatus = 'neutral'
+
+      changeCogs = cogsPercent
+      cogsTrend = changeCogs <= 65 ? 'down' : 'up'
+      cogsStatus = changeCogs <= 65 ? 'positive' : 'negative'
+
+      const nonZeroGrowth = enrichedRecords.filter(r => r.metrics.monthlyGrowth !== 0)
+      const avgGrowth = nonZeroGrowth.length > 0 ? nonZeroGrowth.reduce((s, r) => s + r.metrics.monthlyGrowth, 0) / nonZeroGrowth.length : 0
+      growthPercent = avgGrowth
+      changeGrowth = avgGrowth
+      growthChangeLabel = 'avg MoM growth'
+      growthTrend = changeGrowth >= 0 ? 'up' : 'down'
+      growthStatus = changeGrowth >= 0 ? 'positive' : 'negative'
+
+      subtitle = 'Life To Date (LTD)'
+    }
 
     return [
       {
         title: 'Revenue',
-        value: formatLakh(current?.revenue || 0),
-        change: current?.metrics.monthlyGrowth || 0,
-        changeLabel: 'vs prev month',
-        trend: (current?.metrics.monthlyGrowth || 0) >= 0 ? 'up' : 'down',
-        status: (current?.metrics.monthlyGrowth || 0) >= 0 ? 'positive' : 'negative',
+        value: formatLakh(revenue),
+        change: changeRevenue,
+        changeLabel: revenueChangeLabel,
+        trend: revenueTrend,
+        status: revenueStatus,
         icon: <DollarSign size={18} />,
         gradient: 'gradient-primary',
-        subtitle: current ? `${current.month} ${current.year}` : undefined,
+        subtitle,
       },
       {
         title: 'Gross Margin',
-        value: formatLakh(current?.metrics.grossMargin || 0),
-        change: current?.metrics.grossMarginPercent || 0,
-        changeLabel: 'of revenue',
-        trend: (current?.metrics.grossMarginPercent || 0) >= 30 ? 'up' : 'down',
-        status: (current?.metrics.grossMarginPercent || 0) >= 30 ? 'positive' : 'negative',
+        value: formatLakh(grossMargin),
+        change: changeGrossMargin,
+        changeLabel: grossMarginChangeLabel,
+        trend: grossMarginTrend,
+        status: grossMarginStatus,
         icon: <TrendingUp size={18} />,
         gradient: 'gradient-success',
       },
       {
         title: 'Net Margin',
-        value: formatLakh(current?.metrics.netMargin || 0),
-        change: current?.metrics.netMarginPercent || 0,
-        changeLabel: 'of revenue',
-        trend: (current?.metrics.netMarginPercent || 0) >= 0 ? 'up' : 'down',
-        status: (current?.metrics.netMarginPercent || 0) >= 0 ? 'positive' : 'negative',
+        value: formatLakh(netMargin),
+        change: changeNetMargin,
+        changeLabel: netMarginChangeLabel,
+        trend: netMarginTrend,
+        status: netMarginStatus,
         icon: <Target size={18} />,
         gradient: 'bg-gradient-to-br from-indigo-500 to-purple-600',
       },
       {
         title: 'Collections',
-        value: formatLakh(current?.collections || 0),
-        change: current?.metrics.collectionPercent || 0,
-        changeLabel: 'collection rate',
-        trend: (current?.metrics.collectionPercent || 0) >= 80 ? 'up' : 'down',
-        status: (current?.metrics.collectionPercent || 0) >= 80 ? 'positive' : 'negative',
+        value: formatLakh(collections),
+        change: changeCollections,
+        changeLabel: collectionsChangeLabel,
+        trend: collectionsTrend,
+        status: collectionsStatus,
         icon: <CreditCard size={18} />,
         gradient: 'bg-gradient-to-br from-cyan-500 to-blue-500',
       },
       {
         title: 'Receivables',
-        value: formatLakh(current?.receivables || 0),
-        change: prev ? ((current?.receivables || 0) - prev.receivables) : 0,
-        changeLabel: 'change',
-        trend: (current?.receivables || 0) <= (prev?.receivables || 0) ? 'down' : 'up',
-        status: (current?.receivables || 0) <= (prev?.receivables || 0) ? 'positive' : 'negative',
+        value: formatLakh(receivables),
+        change: changeReceivables,
+        changeLabel: receivablesChangeLabel,
+        trend: receivablesTrend,
+        status: receivablesStatus,
         icon: <Receipt size={18} />,
         gradient: 'bg-gradient-to-br from-orange-500 to-amber-500',
       },
       {
         title: 'Payables',
-        value: formatLakh(current?.payables || 0),
-        change: prev ? ((current?.payables || 0) - prev.payables) : 0,
-        changeLabel: 'change',
-        trend: (current?.payables || 0) <= (prev?.payables || 0) ? 'down' : 'up',
-        status: (current?.payables || 0) <= (prev?.payables || 0) ? 'positive' : 'negative',
+        value: formatLakh(payables),
+        change: changePayables,
+        changeLabel: payablesChangeLabel,
+        trend: payablesTrend,
+        status: payablesStatus,
         icon: <ShoppingCart size={18} />,
         gradient: 'bg-gradient-to-br from-pink-500 to-rose-500',
       },
       {
         title: 'COGS %',
-        value: formatPercent(current?.metrics.cogsPercent || 0),
-        change: current?.metrics.cogsPercent || 0,
-        changeLabel: 'of revenue',
-        trend: (current?.metrics.cogsPercent || 0) <= 65 ? 'down' : 'up',
-        status: (current?.metrics.cogsPercent || 0) <= 65 ? 'positive' : 'negative',
+        value: formatPercent(cogsPercent),
+        change: changeCogs,
+        changeLabel: cogsChangeLabel,
+        trend: cogsTrend,
+        status: cogsStatus,
         icon: <Percent size={18} />,
         gradient: 'bg-gradient-to-br from-red-500 to-rose-600',
       },
       {
         title: 'Growth %',
-        value: formatPercent(current?.metrics.monthlyGrowth || 0),
-        change: current?.metrics.monthlyGrowth || 0,
-        changeLabel: 'MoM growth',
-        trend: (current?.metrics.monthlyGrowth || 0) >= 0 ? 'up' : 'down',
-        status: (current?.metrics.monthlyGrowth || 0) >= 0 ? 'positive' : 'negative',
+        value: formatPercent(growthPercent),
+        change: changeGrowth,
+        changeLabel: growthChangeLabel,
+        trend: growthTrend,
+        status: growthStatus,
         icon: <Activity size={18} />,
         gradient: 'bg-gradient-to-br from-violet-500 to-purple-600',
       },
     ]
-  }, [latestRecord, previousRecord])
+  }, [filteredRecords, enrichedRecords, filter])
 
   const handlePDFExport = async () => {
     try {
