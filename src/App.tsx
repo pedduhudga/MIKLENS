@@ -7,17 +7,32 @@ import { useAuthListener } from '@/hooks/useAuth'
 import { useUIStore } from '@/store/uiStore'
 import { Loader2 } from 'lucide-react'
 
+// Lazy retry helper to handle Vite chunk loading errors gracefully on new deployments
+function lazyRetry<T extends React.ComponentType<any>>(
+  componentImport: () => Promise<{ default: T }>
+): React.LazyExoticComponent<T> {
+  return lazy(async () => {
+    try {
+      return await componentImport()
+    } catch (error) {
+      console.error("Failed to load component chunk, forcing reload:", error)
+      window.location.reload()
+      return new Promise(() => {})
+    }
+  })
+}
+
 // Lazy loaded pages
-const LoginPage = lazy(() => import('@/pages/LoginPage'))
-const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
-const DataEntryPage = lazy(() => import('@/pages/DataEntryPage'))
-const AnalyticsPage = lazy(() => import('@/pages/AnalyticsPage'))
-const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
-const ChartsPage = lazy(() => import('@/pages/ChartsPage'))
-const TimelinePage = lazy(() => import('@/pages/TimelinePage'))
-const AuditPage = lazy(() => import('@/pages/AuditPage'))
-const UsersPage = lazy(() => import('@/pages/UsersPage'))
-const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
+const LoginPage = lazyRetry(() => import('@/pages/LoginPage'))
+const DashboardPage = lazyRetry(() => import('@/pages/DashboardPage'))
+const DataEntryPage = lazyRetry(() => import('@/pages/DataEntryPage'))
+const AnalyticsPage = lazyRetry(() => import('@/pages/AnalyticsPage'))
+const ReportsPage = lazyRetry(() => import('@/pages/ReportsPage'))
+const ChartsPage = lazyRetry(() => import('@/pages/ChartsPage'))
+const TimelinePage = lazyRetry(() => import('@/pages/TimelinePage'))
+const AuditPage = lazyRetry(() => import('@/pages/AuditPage'))
+const UsersPage = lazyRetry(() => import('@/pages/UsersPage'))
+const SettingsPage = lazyRetry(() => import('@/pages/SettingsPage'))
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-full min-h-[400px]">
