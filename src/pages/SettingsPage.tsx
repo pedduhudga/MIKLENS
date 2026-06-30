@@ -121,7 +121,7 @@ export default function SettingsPage() {
           </div>
           <h2 className="font-semibold">Security</h2>
         </div>
-        <div className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); success('Password updated') }} className="space-y-4">
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Current Password</Label>
             <Input type="password" placeholder="••••••••" />
@@ -134,8 +134,8 @@ export default function SettingsPage() {
             <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Confirm Password</Label>
             <Input type="password" placeholder="••••••••" />
           </div>
-          <Button variant="destructive" onClick={() => success('Password updated')} className="w-full">Change Password</Button>
-        </div>
+          <Button type="submit" variant="destructive" className="w-full">Change Password</Button>
+        </form>
       </motion.div>
     </div>
   )
